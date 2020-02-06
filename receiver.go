@@ -21,25 +21,27 @@ type SQSReceiver struct {
 	sqs    sqsiface.SQSAPI
 	finish bool
 
-	mu            sync.Mutex
-	isChecked     bool
-	queueURL      string
-	queueName     string
-	targetDataset string
-	targetTable   string
+	mu        sync.Mutex
+	isChecked bool
+	rules     []*Rule
+	queueURL  string
+	queueName string
 }
 
-func NewSQSReceiver(sess *session.Session, conf *Config) *SQSReceiver {
+func NewSQSReceiver(sess *session.Session, conf *Config) (*SQSReceiver, error) {
 	return newSQSReceiver(conf, sqs.New(sess))
 }
 
-func newSQSReceiver(conf *Config, svc *sqs.SQS) *SQSReceiver {
-	return &SQSReceiver{
-		sqs:           svc,
-		targetTable:   conf.GCP.TargetTable,
-		targetDataset: conf.GCP.TargetDataset,
-		queueName:     conf.AWS.Queue,
+func newSQSReceiver(conf *Config, svc *sqs.SQS) (*SQSReceiver, error) {
+	rules, err := conf.GetMergedRules()
+	if err != nil {
+		return nil, err
 	}
+	return &SQSReceiver{
+		sqs:       svc,
+		rules:     rules,
+		queueName: conf.QueueName,
+	}, nil
 }
 
 func (r *SQSReceiver) Receive(ctx context.Context) (*ImportRequest, error) {
@@ -53,25 +55,24 @@ func (r *SQSReceiver) Receive(ctx context.Context) (*ImportRequest, error) {
 	}
 
 	var isFailed bool = true
-	msgId := *msg.MessageId
+	req := &ImportRequest{
+		ID:            *msg.MessageId,
+		ReceiptHandle: *msg.ReceiptHandle,
+	}
 	defer func() {
 		if isFailed {
-			infof("[%s] Aborted message. ReceiptHandle = %s", msgId, *msg.ReceiptHandle)
+			infof("[%s] Aborted message. ReceiptHandle = %s", req.ID, req.ReceiptHandle)
 		}
 	}()
 
 	event, err := r.parse(msg)
 	if err != nil {
-		errorf("[%s]  Can't parse event from Body. %s", msgId, err)
+		errorf("[%s]  Can't parse event from Body. %s", req.ID, err)
 		return nil, err
 	}
-	records := r.convert(event)
+	req.Records = r.convert(event)
 	isFailed = false
-	return &ImportRequest{
-		ID:            msgId,
-		ReceiptHandle: *msg.ReceiptHandle,
-		Records:       records,
-	}, nil
+	return req, nil
 }
 
 var policy = backoff.NewExponential(
@@ -151,7 +152,7 @@ func (r *SQSReceiver) receive(ctx context.Context) (*sqs.Message, error) {
 	msg := res.Messages[0]
 	msgId := *msg.MessageId
 	infof("[%s] Recieved message.", msgId)
-	debugf("[%s] handle: %s", msgId, *msg.ReceiptHandle)
+	debugf("[%s] receipt handle: %s", msgId, *msg.ReceiptHandle)
 	debugf("[%s] body: %s", msgId, *msg.Body)
 	return msg, nil
 }
@@ -178,15 +179,21 @@ func (r *SQSReceiver) parse(msg *sqs.Message) (*events.S3Event, error) {
 	return &event, err
 }
 
-func (r *SQSReceiver) convert(msg *events.S3Event) []ImportRequestRecord {
-	ret := make([]ImportRequestRecord, 0, len(msg.Records))
-	for _, record := range msg.Records {
-		ret = append(ret, ImportRequestRecord{
-			SourceBucketName: record.S3.Bucket.Name,
-			SourceObjectKey:  record.S3.Object.Key,
-			TargetDataset:    r.targetDataset,
-			TargetTable:      r.targetTable,
-		})
+func (r *SQSReceiver) convert(event *events.S3Event) []*ImportRequestRecord {
+	ret := make([]*ImportRequestRecord, 0, len(event.Records))
+	for _, record := range event.Records {
+		for _, rule := range r.rules {
+			if !rule.MatchEventRecord(record) {
+				continue
+			}
+			debugf("match rule: %s", rule.String())
+			ret = append(ret, &ImportRequestRecord{
+				SourceBucketName: record.S3.Bucket.Name,
+				SourceObjectKey:  record.S3.Object.Key,
+				TargetDataset:    rule.BigQuery.Dataset,
+				TargetTable:      rule.BigQuery.Table,
+			})
+		}
 	}
 	return ret
 }

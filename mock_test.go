@@ -29,7 +29,11 @@ import (
 
 func NewMockedReceiver(t *testing.T, conf *Config) (*SQSReceiver, func()) {
 	svc, closer := newMockedSQS(t)
-	return newSQSReceiver(conf, svc), closer
+	receiver, err := newSQSReceiver(conf, svc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return receiver, closer
 }
 
 func NewMockedTransporter(t *testing.T, conf *Config) (*BigQueryTransporter, func()) {

@@ -25,10 +25,10 @@ func TestReceive(t *testing.T) {
 			expected: &bqin.ImportRequest{
 				ID:            "5fea7756-0ea4-451a-a703-a558b933e274",
 				ReceiptHandle: bqin.MockedReceiptHandle,
-				Records: []bqin.ImportRequestRecord{
+				Records: []*bqin.ImportRequestRecord{
 					{
-						SourceBucketName: "mybucket",
-						SourceObjectKey:  "user.csv",
+						SourceBucketName: "bqin.bucket.test",
+						SourceObjectKey:  "data/user/part-0001.csv",
 						TargetDataset:    "test",
 						TargetTable:      "user",
 					},
@@ -73,10 +73,10 @@ func TestComplete(t *testing.T) {
 			request: &bqin.ImportRequest{
 				ID:            "5fea7756-0ea4-451a-a703-a558b933e274",
 				ReceiptHandle: bqin.MockedReceiptHandle,
-				Records: []bqin.ImportRequestRecord{
+				Records: []*bqin.ImportRequestRecord{
 					{
-						SourceBucketName: "mybucket",
-						SourceObjectKey:  "user.csv",
+						SourceBucketName: "bqin.bucket.test",
+						SourceObjectKey:  "data/user/part-0001.csv",
 						TargetDataset:    "test",
 						TargetTable:      "user",
 					},

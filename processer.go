@@ -18,7 +18,7 @@ type BigQueryTransporter struct {
 	gcs   *storage.Client
 	bq    *bigquery.Client
 
-	tmpBucketName string
+	temporaryBucket string
 }
 
 func NewBigQueryTransporter(conf *Config, sess *session.Session) (*BigQueryTransporter, error) {
@@ -42,10 +42,10 @@ func NewBigQueryTransporter(conf *Config, sess *session.Session) (*BigQueryTrans
 
 func newBigQueryTransporter(conf *Config, s3svc *s3.S3, gcs *storage.Client, bq *bigquery.Client) *BigQueryTransporter {
 	return &BigQueryTransporter{
-		s3svc:         s3svc,
-		gcs:           gcs,
-		bq:            bq,
-		tmpBucketName: conf.GCP.TmpBucket,
+		s3svc:           s3svc,
+		gcs:             gcs,
+		bq:              bq,
+		temporaryBucket: conf.GCSTemporaryBucket,
 	}
 }
 
@@ -56,11 +56,11 @@ func (t *BigQueryTransporter) Process(ctx context.Context, req *ImportRequest) e
 		return errors.Wrap(err, "Process.check condition invalid")
 	}
 	for _, record := range req.Records {
-		obj, err := t.transfer(ctx, &record, bucket)
+		obj, err := t.transfer(ctx, record, bucket)
 		if err != nil {
 			return errors.Wrap(err, "Process.transfer")
 		}
-		if err := t.load(ctx, &record); err != nil {
+		if err := t.load(ctx, record); err != nil {
 			return errors.Wrap(err, "Process.load")
 		}
 		if err := t.cleanup(ctx, obj); err != nil {
@@ -71,10 +71,10 @@ func (t *BigQueryTransporter) Process(ctx context.Context, req *ImportRequest) e
 }
 
 func (t *BigQueryTransporter) check(ctx context.Context) (*storage.BucketHandle, error) {
-	if t.tmpBucketName == "" {
+	if t.temporaryBucket == "" {
 		return nil, errors.New("gcs temporary bucket name is missing. invalid config")
 	}
-	bucket := t.gcs.Bucket(t.tmpBucketName)
+	bucket := t.gcs.Bucket(t.temporaryBucket)
 	attr, err := bucket.Attrs(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "gcs temporary bucket attribute can not check")
@@ -109,7 +109,7 @@ func (t *BigQueryTransporter) transfer(ctx context.Context, record *ImportReques
 }
 
 func (t *BigQueryTransporter) tmpObjectURL(record *ImportRequestRecord) string {
-	return fmt.Sprintf("gs://%s/%s", t.tmpBucketName, record.SourceObjectKey)
+	return fmt.Sprintf("gs://%s/%s", t.temporaryBucket, record.SourceObjectKey)
 }
 
 func (t *BigQueryTransporter) load(ctx context.Context, record *ImportRequestRecord) error {

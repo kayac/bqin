@@ -16,9 +16,9 @@ var (
 )
 
 type ImportRequest struct {
-	ID            string                `json:"id"`
-	ReceiptHandle string                `json:"receipt_handle"`
-	Records       []ImportRequestRecord `json:"records"`
+	ID            string                 `json:"id"`
+	ReceiptHandle string                 `json:"receipt_handle"`
+	Records       []*ImportRequestRecord `json:"records"`
 }
 
 type ImportRequestRecord struct {
@@ -53,12 +53,18 @@ func NewApp(conf *Config) (*App, error) {
 		Config:            aws.Config{Region: aws.String(conf.AWS.Region)},
 		SharedConfigState: session.SharedConfigEnable,
 	}))
+	receiver, err := NewSQSReceiver(sess, conf)
+	if err != nil {
+		errorf("receiver build error :%s", err)
+		return nil, err
+	}
 	processor, err := NewBigQueryTransporter(conf, sess)
 	if err != nil {
+		errorf("processor build error :%s", err)
 		return nil, err
 	}
 	return &App{
-		Receiver:  NewSQSReceiver(sess, conf),
+		Receiver:  receiver,
 		Processor: processor,
 	}, nil
 }
