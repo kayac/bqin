@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/kayac/bqin/internal/logger"
 	"github.com/pkg/errors"
 )
 
@@ -79,8 +80,8 @@ func (t *BigQueryTransporter) check(ctx context.Context) (*storage.BucketHandle,
 	if err != nil {
 		return nil, errors.Wrap(err, "gcs temporary bucket attribute can not check")
 	}
-	debugf("temporary bucket name is %s", attr.Name)
-	debugf("temporary bucket location is %s (type:%s)", attr.Location, attr.LocationType)
+	logger.Debugf("temporary bucket name is %s", attr.Name)
+	logger.Debugf("temporary bucket location is %s (type:%s)", attr.Location, attr.LocationType)
 	return bucket, nil
 }
 
@@ -93,7 +94,7 @@ func (t *BigQueryTransporter) transfer(ctx context.Context, record *ImportReques
 	if err != nil {
 		return nil, errors.Wrap(err, "get object from s3 failed")
 	}
-	debugf("get object from %s successed.", record.Source)
+	logger.Debugf("get object from %s successed.", record.Source)
 	defer resp.Body.Close()
 
 	obj := gbucket.Object(record.Source.Object)
@@ -104,7 +105,7 @@ func (t *BigQueryTransporter) transfer(ctx context.Context, record *ImportReques
 	if err != nil {
 		return nil, errors.Wrap(err, "copy object failed")
 	}
-	debugf("transfer to %s successed.", t.tmpObjectURL(record))
+	logger.Debugf("transfer to %s successed.", t.tmpObjectURL(record))
 	return obj, nil
 }
 
@@ -117,7 +118,7 @@ func (t *BigQueryTransporter) load(ctx context.Context, record *ImportRequestRec
 	gcsRef.AutoDetect = true
 	gcsRef.MaxBadRecords = 100
 	gcsRef.AllowJaggedRows = true
-	debugf("prepre gcs reference: dump is %+v", gcsRef)
+	logger.Debugf("prepre gcs reference: dump is %+v", gcsRef)
 
 	loader := t.bq.Dataset(record.Target.Dataset).Table(record.Target.Table).LoaderFrom(gcsRef)
 	loader.CreateDisposition = bigquery.CreateIfNeeded
@@ -127,29 +128,30 @@ func (t *BigQueryTransporter) load(ctx context.Context, record *ImportRequestRec
 		return errors.Wrap(err, "create job failed")
 	}
 	jobID := job.ID()
-	debugf("loader run successed. job id = %s", jobID)
-	debugf("[job:%s] wating", jobID)
+	logger.Debugf("loader run successed. job id = %s", jobID)
+	logger.Debugf("[job:%s] wating", jobID)
 	status, err := job.Wait(ctx)
 	if err != nil {
 		return errors.Wrap(err, "can not wait job")
 	}
-	debugf("[job:%s] done.", jobID)
+	logger.Debugf("[job:%s] done.", jobID)
 	if err := status.Err(); err != nil {
 		return errors.Wrap(err, "job status error")
 	}
-	debugf("[job:%s] successed.", jobID)
+	logger.Debugf("[job:%s] successed.", jobID)
 	return nil
 }
 
 func (t *BigQueryTransporter) cleanup(ctx context.Context, obj *storage.ObjectHandle) error {
-	debugf("cleanup temporary object gs://%s/%s", obj.BucketName(), obj.ObjectName())
+	logger.Debugf("cleanup temporary object gs://%s/%s", obj.BucketName(), obj.ObjectName())
 	err := obj.Delete(ctx)
 	if err != nil {
 		if err != storage.ErrObjectNotExist {
-			return errors.Wrap(err, "can not delete temporary object")
+			logger.Errorf("can not delete temporary object reason: %s", err)
+			return err
 		}
-		debugf("aleady removed gs://%s/%s", obj.BucketName(), obj.ObjectName())
+		logger.Debugf("aleady removed gs://%s/%s", obj.BucketName(), obj.ObjectName())
 	}
-	debugf("cleanup finish.")
+	logger.Debugf("cleanup finish.")
 	return nil
 }

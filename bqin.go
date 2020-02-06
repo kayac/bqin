@@ -10,6 +10,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/kayac/bqin/internal/logger"
 )
 
 var (
@@ -68,12 +69,12 @@ func NewApp(conf *Config) (*App, error) {
 	}))
 	receiver, err := NewSQSReceiver(sess, conf)
 	if err != nil {
-		errorf("receiver build error :%s", err)
+		logger.Errorf("receiver build error :%s", err)
 		return nil, err
 	}
 	processor, err := NewBigQueryTransporter(conf, sess)
 	if err != nil {
-		errorf("processor build error :%s", err)
+		logger.Errorf("processor build error :%s", err)
 		return nil, err
 	}
 	return &App{
@@ -90,8 +91,8 @@ func (app *App) ReceiveAndProcess() error {
 	if app.Processor == nil {
 		return errors.New("Processor is nil")
 	}
-	infof("Starting up bqin worker")
-	defer infof("Shutdown bqin worker")
+	logger.Infof("Starting up bqin worker")
+	defer logger.Infof("Shutdown bqin worker")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

@@ -10,8 +10,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/hashicorp/logutils"
 	"github.com/kayac/bqin"
+	"github.com/kayac/bqin/internal/logger"
 )
 
 var (
@@ -40,17 +40,12 @@ func main() {
 		return
 	}
 
-	minLevel := "info"
+	minLevel := logger.InfoLevel
 	if debug {
-		minLevel = "debug"
+		minLevel = logger.DebugLevel
 	}
-	filter := &logutils.LevelFilter{
-		Levels:   []logutils.LogLevel{"debug", "info", "error"},
-		MinLevel: logutils.LogLevel(minLevel),
-		Writer:   os.Stderr,
-	}
-	log.SetOutput(filter)
-	log.Println("[info] bqin version:", version)
+	logger.Setup(os.Stderr, minLevel)
+	logger.Infof("bqin version:", version)
 
 	conf, err := bqin.LoadConfig(config)
 	if err != nil {

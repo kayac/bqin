@@ -3,6 +3,7 @@ package bqin
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/url"
 	"strings"
 	"sync"
@@ -13,8 +14,12 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sqs"
 	"github.com/aws/aws-sdk-go/service/sqs/sqsiface"
+	"github.com/kayac/bqin/internal/logger"
 	"github.com/lestrrat-go/backoff"
-	"github.com/pkg/errors"
+)
+
+var (
+	ErrMaxRetry = errors.New("max retry count reached")
 )
 
 type SQSReceiver struct {
@@ -46,7 +51,7 @@ func newSQSReceiver(conf *Config, svc *sqs.SQS) (*SQSReceiver, error) {
 
 func (r *SQSReceiver) Receive(ctx context.Context) (*ImportRequest, error) {
 	if err := r.check(ctx); err != nil {
-		errorf("Can't pass check. %s", err)
+		logger.Errorf("Can't pass check. %s", err)
 		return nil, err
 	}
 	msg, err := r.receive(ctx)
@@ -61,13 +66,13 @@ func (r *SQSReceiver) Receive(ctx context.Context) (*ImportRequest, error) {
 	}
 	defer func() {
 		if isFailed {
-			infof("[%s] Aborted message. ReceiptHandle = %s", req.ID, req.ReceiptHandle)
+			logger.Infof("[%s] Aborted message. ReceiptHandle = %s", req.ID, req.ReceiptHandle)
 		}
 	}()
 
 	event, err := r.parse(msg)
 	if err != nil {
-		errorf("[%s]  Can't parse event from Body. %s", req.ID, err)
+		logger.Errorf("[%s]  Can't parse event from Body. %s", req.ID, err)
 		return nil, err
 	}
 	req.Records = r.convert(event)
@@ -85,7 +90,7 @@ func (r *SQSReceiver) Complete(_ context.Context, req *ImportRequest) error {
 	var completed = false
 	defer func() {
 		if !completed {
-			infof("[%s] Can't complete message. ReceiptHandle: %s", req.ID, req.ReceiptHandle)
+			logger.Infof("[%s] Can't complete message. ReceiptHandle: %s", req.ID, req.ReceiptHandle)
 		}
 	}()
 
@@ -94,7 +99,7 @@ func (r *SQSReceiver) Complete(_ context.Context, req *ImportRequest) error {
 		ReceiptHandle: aws.String(req.ReceiptHandle),
 	})
 	if err != nil {
-		infof("[%s] Can't delete message : %s", req.ID, err)
+		logger.Infof("[%s] Can't delete message : %s", req.ID, err)
 		b, cancel := policy.Start(context.Background())
 		defer cancel()
 
@@ -105,15 +110,15 @@ func (r *SQSReceiver) Complete(_ context.Context, req *ImportRequest) error {
 			})
 			if err == nil {
 				completed = true
-				infof("[%s] Retry completed message.", req.ID)
+				logger.Infof("[%s] Retry completed message.", req.ID)
 				return nil
 			}
 		}
-		errorf("[%s] Max retry count reached. Giving up.", req.ID)
-		return errors.Wrap(err, "Max retry count")
+		logger.Errorf("[%s] Max retry count reached. Giving up. last error: %s", req.ID, err)
+		return ErrMaxRetry
 	}
 	completed = true
-	infof("[%s] Completed message.", req.ID)
+	logger.Infof("[%s] Completed message.", req.ID)
 	return nil
 }
 
@@ -125,7 +130,7 @@ func (r *SQSReceiver) check(ctx context.Context) error {
 	}
 
 	//first check only
-	infof("Connect to SQS: %s", r.queueName)
+	logger.Infof("Connect to SQS: %s", r.queueName)
 	res, err := r.sqs.GetQueueUrlWithContext(ctx, &sqs.GetQueueUrlInput{
 		QueueName: aws.String(r.queueName),
 	})
@@ -134,7 +139,7 @@ func (r *SQSReceiver) check(ctx context.Context) error {
 	}
 	r.isChecked = true
 	r.queueURL = *res.QueueUrl
-	debugf("QueueURL is %s", r.queueURL)
+	logger.Debugf("QueueURL is %s", r.queueURL)
 	return nil
 }
 
@@ -151,9 +156,9 @@ func (r *SQSReceiver) receive(ctx context.Context) (*sqs.Message, error) {
 	}
 	msg := res.Messages[0]
 	msgId := *msg.MessageId
-	infof("[%s] Recieved message.", msgId)
-	debugf("[%s] receipt handle: %s", msgId, *msg.ReceiptHandle)
-	debugf("[%s] body: %s", msgId, *msg.Body)
+	logger.Infof("[%s] Recieved message.", msgId)
+	logger.Debugf("[%s] receipt handle: %s", msgId, *msg.ReceiptHandle)
+	logger.Debugf("[%s] body: %s", msgId, *msg.Body)
 	return msg, nil
 }
 
@@ -187,7 +192,7 @@ func (r *SQSReceiver) convert(event *events.S3Event) []*ImportRequestRecord {
 			if !ok {
 				continue
 			}
-			debugf("match rule: %s", rule.String())
+			logger.Debugf("match rule: %s", rule.String())
 			ret = append(ret, &ImportRequestRecord{
 				Source: &ImportSource{
 					Bucket: record.S3.Bucket.Name,

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/kayac/bqin"
+	"github.com/kayac/bqin/internal/logger"
 	"github.com/pkg/errors"
 )
 
@@ -42,7 +43,7 @@ func TestProcess(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.casename, func(t *testing.T) {
-			setTestLogger(t, "debug")
+			logger.Setup(logger.NewTestingLogWriter(t), logger.DebugLevel)
 			processor, closer := bqin.NewMockedTransporter(t, conf)
 			defer closer()
 
