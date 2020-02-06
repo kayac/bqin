@@ -27,10 +27,24 @@ func TestReceive(t *testing.T) {
 				ReceiptHandle: bqin.MockedReceiptHandle,
 				Records: []*bqin.ImportRequestRecord{
 					{
-						SourceBucketName: "bqin.bucket.test",
-						SourceObjectKey:  "data/user/part-0001.csv",
-						TargetDataset:    "test",
-						TargetTable:      "user",
+						Source: &bqin.ImportSource{
+							Bucket: "bqin.bucket.test",
+							Object: "data/user/part-0001.csv",
+						},
+						Target: &bqin.ImportTarget{
+							Dataset: "test",
+							Table:   "user",
+						},
+					},
+					{
+						Source: &bqin.ImportSource{
+							Bucket: "bqin.bucket.test",
+							Object: "data/user/part-0001.csv",
+						},
+						Target: &bqin.ImportTarget{
+							Dataset: "test",
+							Table:   "user_0001",
+						},
 					},
 				},
 			},
@@ -75,10 +89,14 @@ func TestComplete(t *testing.T) {
 				ReceiptHandle: bqin.MockedReceiptHandle,
 				Records: []*bqin.ImportRequestRecord{
 					{
-						SourceBucketName: "bqin.bucket.test",
-						SourceObjectKey:  "data/user/part-0001.csv",
-						TargetDataset:    "test",
-						TargetTable:      "user",
+						Source: &bqin.ImportSource{
+							Bucket: "bqin.bucket.test",
+							Object: "data/user/part-0001.csv",
+						},
+						Target: &bqin.ImportTarget{
+							Dataset: "test",
+							Table:   "user",
+						},
 					},
 				},
 			},

@@ -87,16 +87,16 @@ func (t *BigQueryTransporter) check(ctx context.Context) (*storage.BucketHandle,
 func (t *BigQueryTransporter) transfer(ctx context.Context, record *ImportRequestRecord, gbucket *storage.BucketHandle) (*storage.ObjectHandle, error) {
 
 	resp, err := t.s3svc.GetObjectWithContext(ctx, &s3.GetObjectInput{
-		Bucket: aws.String(record.SourceBucketName),
-		Key:    aws.String(record.SourceObjectKey),
+		Bucket: aws.String(record.Source.Bucket),
+		Key:    aws.String(record.Source.Object),
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "get object from s3 failed")
 	}
-	debugf("get object from s3://%s/%s successed.", record.SourceBucketName, record.SourceObjectKey)
+	debugf("get object from %s successed.", record.Source)
 	defer resp.Body.Close()
 
-	obj := gbucket.Object(record.SourceObjectKey)
+	obj := gbucket.Object(record.Source.Object)
 	writer := obj.NewWriter(ctx)
 	defer writer.Close()
 
@@ -109,7 +109,7 @@ func (t *BigQueryTransporter) transfer(ctx context.Context, record *ImportReques
 }
 
 func (t *BigQueryTransporter) tmpObjectURL(record *ImportRequestRecord) string {
-	return fmt.Sprintf("gs://%s/%s", t.temporaryBucket, record.SourceObjectKey)
+	return fmt.Sprintf("gs://%s/%s", t.temporaryBucket, record.Source.Object)
 }
 
 func (t *BigQueryTransporter) load(ctx context.Context, record *ImportRequestRecord) error {
@@ -119,7 +119,7 @@ func (t *BigQueryTransporter) load(ctx context.Context, record *ImportRequestRec
 	gcsRef.AllowJaggedRows = true
 	debugf("prepre gcs reference: dump is %+v", gcsRef)
 
-	loader := t.bq.Dataset(record.TargetDataset).Table(record.TargetTable).LoaderFrom(gcsRef)
+	loader := t.bq.Dataset(record.Target.Dataset).Table(record.Target.Table).LoaderFrom(gcsRef)
 	loader.CreateDisposition = bigquery.CreateIfNeeded
 
 	job, err := loader.Run(ctx)

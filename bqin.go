@@ -3,6 +3,7 @@ package bqin
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -22,10 +23,22 @@ type ImportRequest struct {
 }
 
 type ImportRequestRecord struct {
-	SourceBucketName string `json:"source_bucket_name"`
-	SourceObjectKey  string `json:"source_object_key"`
-	TargetDataset    string `json:"target_dataset"`
-	TargetTable      string `json:"target_table"`
+	Source *ImportSource `json:"source"`
+	Target *ImportTarget `json:"target"`
+}
+
+type ImportSource struct {
+	Bucket string `json:"bucket"`
+	Object string `json:"object"`
+}
+
+func (s ImportSource) String() string {
+	return fmt.Sprintf(S3URITemplate, s.Bucket, s.Object)
+}
+
+type ImportTarget struct {
+	Dataset string `json:"dataset"`
+	Table   string `json:"table"`
 }
 
 type Receiver interface {

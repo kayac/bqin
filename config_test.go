@@ -9,7 +9,7 @@ import (
 
 var ExpectedDefault = []string{
 	"s3://bqin.bucket.test/data/user => test.user",
-	"s3://example.bucket/test/(s[0-9]+)/(t[0-9]+)/ => test.any",
+	"s3://bqin.bucket.test/data/(.+)/part-([0-9]+).csv => test.$1_$2",
 }
 
 func TestLoadConfig(t *testing.T) {

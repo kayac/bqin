@@ -25,10 +25,14 @@ func TestProcess(t *testing.T) {
 				ReceiptHandle: "123",
 				Records: []*bqin.ImportRequestRecord{
 					{
-						SourceBucketName: "bqin.bucket.test",
-						SourceObjectKey:  "data/user/part-0001.csv",
-						TargetDataset:    "test",
-						TargetTable:      "user",
+						Source: &bqin.ImportSource{
+							Bucket: "bqin.bucket.test",
+							Object: "data/user/part-0001.csv",
+						},
+						Target: &bqin.ImportTarget{
+							Dataset: "test",
+							Table:   "user",
+						},
 					},
 				},
 			},

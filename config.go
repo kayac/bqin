@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/aws/aws-lambda-go/events"
@@ -37,7 +38,7 @@ type GCPConfig struct {
 type Rule struct {
 	S3         *S3Soruce            `yaml:"s3"`
 	BigQuery   *BigQueryDestination `yaml:"big_query"`
-	keyMatcher func(string) bool
+	keyMatcher func(string) (bool, []string)
 }
 
 type BigQueryDestination struct {
@@ -131,11 +132,11 @@ func mergeRule(defaultRule *Rule, baseRule *Rule) (*Rule, error) {
 
 func (r *Rule) buildKeyMacher() error {
 	if prefix := r.S3.KeyPrefix; prefix != "" {
-		r.keyMatcher = func(key string) bool {
+		r.keyMatcher = func(key string) (bool, []string) {
 			if strings.HasPrefix(key, prefix) {
-				return true
+				return true, []string{key}
 			}
-			return false
+			return false, nil
 		}
 		return nil
 	}
@@ -144,23 +145,44 @@ func (r *Rule) buildKeyMacher() error {
 		if err != nil {
 			return err
 		}
-		r.keyMatcher = reg.MatchString
+		r.keyMatcher = func(key string) (bool, []string) {
+			capture := reg.FindStringSubmatch(key)
+			if len(capture) == 0 {
+				return false, nil
+			}
+			return true, capture
+		}
 		return nil
 	}
 	return errors.New("rule.s3.key_prefix or key_regexp is not defined")
 }
 
-func (r *Rule) Match(bucket, key string) bool {
+func (r *Rule) Match(bucket, key string) (bool, []string) {
 	if bucket != r.S3.Bucket {
-		return false
+		return false, nil
 	}
 	return r.keyMatcher(key)
 }
 
-func (r *Rule) MatchEventRecord(record events.S3EventRecord) bool {
+func (r *Rule) MatchEventRecord(record events.S3EventRecord) (bool, []string) {
 	return r.Match(record.S3.Bucket.Name, record.S3.Object.Key)
 }
 
 func (r *Rule) String() string {
 	return strings.Join([]string{r.S3.String(), r.BigQuery.String()}, " => ")
+}
+
+// example: when capture []string{"hoge"},  table_$1 => table_hoge
+func expandPlaceHolder(s string, capture []string) string {
+	for i, v := range capture {
+		s = strings.Replace(s, "$"+strconv.Itoa(i), v, -1)
+	}
+	return s
+}
+
+func (r *Rule) BuildImportTarget(capture []string) *ImportTarget {
+	return &ImportTarget{
+		Dataset: expandPlaceHolder(r.BigQuery.Dataset, capture),
+		Table:   expandPlaceHolder(r.BigQuery.Table, capture),
+	}
 }

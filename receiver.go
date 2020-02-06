@@ -183,15 +183,17 @@ func (r *SQSReceiver) convert(event *events.S3Event) []*ImportRequestRecord {
 	ret := make([]*ImportRequestRecord, 0, len(event.Records))
 	for _, record := range event.Records {
 		for _, rule := range r.rules {
-			if !rule.MatchEventRecord(record) {
+			ok, capture := rule.MatchEventRecord(record)
+			if !ok {
 				continue
 			}
 			debugf("match rule: %s", rule.String())
 			ret = append(ret, &ImportRequestRecord{
-				SourceBucketName: record.S3.Bucket.Name,
-				SourceObjectKey:  record.S3.Object.Key,
-				TargetDataset:    rule.BigQuery.Dataset,
-				TargetTable:      rule.BigQuery.Table,
+				Source: &ImportSource{
+					Bucket: record.S3.Bucket.Name,
+					Object: record.S3.Object.Key,
+				},
+				Target: rule.BuildImportTarget(capture),
 			})
 		}
 	}
