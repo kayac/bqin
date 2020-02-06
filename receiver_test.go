@@ -1,0 +1,103 @@
+package bqin_test
+
+import (
+	"context"
+	"reflect"
+	"testing"
+
+	"github.com/kayac/bqin"
+	"github.com/kylelemons/godebug/pretty"
+	"github.com/pkg/errors"
+)
+
+func TestReceive(t *testing.T) {
+	conf, err := bqin.LoadConfig("testdata/config/default.yaml")
+	if err != nil {
+		t.Fatalf("test config can not load: %v", err)
+	}
+	cases := []struct {
+		casename string
+		expected *bqin.ImportRequest
+		isErr    bool
+	}{
+		{
+			casename: "success",
+			expected: &bqin.ImportRequest{
+				ID:            "5fea7756-0ea4-451a-a703-a558b933e274",
+				ReceiptHandle: bqin.MockedReceiptHandle,
+				Records: []bqin.ImportRequestRecord{
+					{
+						SourceBucketName: "mybucket",
+						SourceObjectKey:  "user.csv",
+						TargetDataset:    "test",
+						TargetTable:      "user",
+					},
+				},
+			},
+			isErr: false,
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.casename, func(t *testing.T) {
+			setTestLogger(t, "debug")
+			receiver, closer := bqin.NewMockedReceiver(t, conf)
+			defer closer()
+
+			request, err := receiver.Receive(context.Background())
+			isErr := err != nil
+			if isErr != c.isErr {
+				t.Logf("error = %#v", err)
+				t.Logf("original error = %#v", errors.Cause(err))
+				t.Error("error status is unexpected")
+			}
+			if !reflect.DeepEqual(request, c.expected) {
+				t.Logf("request diff: %s", pretty.Compare(request, c.expected))
+				t.Error("request unexpected content")
+			}
+		})
+	}
+}
+
+func TestComplete(t *testing.T) {
+	conf, err := bqin.LoadConfig("testdata/config/default.yaml")
+	if err != nil {
+		t.Fatalf("test config can not load: %v", err)
+	}
+	cases := []struct {
+		casename string
+		request  *bqin.ImportRequest
+		isErr    bool
+	}{
+		{
+			casename: "success",
+			request: &bqin.ImportRequest{
+				ID:            "5fea7756-0ea4-451a-a703-a558b933e274",
+				ReceiptHandle: bqin.MockedReceiptHandle,
+				Records: []bqin.ImportRequestRecord{
+					{
+						SourceBucketName: "mybucket",
+						SourceObjectKey:  "user.csv",
+						TargetDataset:    "test",
+						TargetTable:      "user",
+					},
+				},
+			},
+			isErr: false,
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.casename, func(t *testing.T) {
+			setTestLogger(t, "debug")
+			receiver, closer := bqin.NewMockedReceiver(t, conf)
+			defer closer()
+
+			err := receiver.Complete(context.Background(), c.request)
+			isErr := err != nil
+			if isErr != c.isErr {
+				t.Logf("error = %#v", err)
+				t.Logf("original error = %#v", errors.Cause(err))
+				t.Error("error status is unexpected")
+			}
+		})
+	}
+}
