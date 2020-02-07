@@ -18,8 +18,8 @@ var (
 )
 
 type ImportRequest struct {
-	ID            string                 `json:"id"`
-	ReceiptHandle string                 `json:"receipt_handle"`
+	ID            string                 `json:"id,omitempty"`
+	ReceiptHandle string                 `json:"receipt_handle,omitempty"`
 	Records       []*ImportRequestRecord `json:"records"`
 }
 
