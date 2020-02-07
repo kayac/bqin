@@ -44,7 +44,7 @@ func TestProcess(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.casename, func(t *testing.T) {
 			logger.Setup(logger.NewTestingLogWriter(t), logger.DebugLevel)
-			processor, closer := bqin.NewMockedTransporter(t, conf)
+			processor, closer := bqin.NewProcessorWithStub(t, conf)
 			defer closer()
 
 			err := processor.Process(context.Background(), c.req)
