@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/kayac/bqin/internal/logger"
 )
 
@@ -32,8 +31,4 @@ func (s *StubS3) serveObject(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusOK)
 	io.Copy(w, body)
-}
-
-func (s *StubS3) NewSvc() *s3.S3 {
-	return s3.New(s.getAWSSession())
 }

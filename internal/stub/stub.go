@@ -6,12 +6,8 @@ import (
 	"net/http/httptest"
 	"sync"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/gorilla/mux"
 	"github.com/kayac/bqin/internal/logger"
-	"google.golang.org/api/option"
 )
 
 type stub struct {
@@ -85,22 +81,6 @@ func (s *stub) getAccessLog(r *http.Request) *AccessLog {
 	return l.(*AccessLog)
 }
 
-func (s *stub) getAWSSession() *session.Session {
-	endpoint := s.getServer().URL
-	sess := session.Must(session.NewSession(&aws.Config{
-		Credentials:      credentials.NewStaticCredentials("AWS_KEY_ID", "AWS_SECRET_KEY", ""),
-		DisableSSL:       aws.Bool(true),
-		Endpoint:         aws.String(endpoint),
-		Region:           aws.String("ap-northeast-1"),
-		S3ForcePathStyle: aws.Bool(true),
-	}))
-	return sess
-}
-
-func (s *stub) getGCPClientOptions() []option.ClientOption {
-	endpoint := s.getServer().URL
-	return []option.ClientOption{
-		option.WithoutAuthentication(),
-		option.WithEndpoint(endpoint),
-	}
+func (s *stub) Endpoint() string {
+	return s.getServer().URL
 }

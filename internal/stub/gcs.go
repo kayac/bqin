@@ -1,13 +1,11 @@
 package stub
 
 import (
-	"context"
 	"encoding/json"
 	"mime/multipart"
 	"net/http"
 	"strings"
 
-	"cloud.google.com/go/storage"
 	"github.com/gorilla/mux"
 	"github.com/kayac/bqin/internal/logger"
 )
@@ -23,13 +21,6 @@ func NewStubGCS() *StubGCS {
 	r.HandleFunc("/b/{bucket_id}", s.serveGetBucket).Methods("GET")
 	r.HandleFunc("/b/{bucket_id}/o", s.serveInsertObject).Methods("POST")
 	return s
-}
-
-func (s *StubGCS) NewClient() (*storage.Client, error) {
-	return storage.NewClient(
-		context.Background(),
-		s.getGCPClientOptions()...,
-	)
 }
 
 type StubGCSGetBucketResponse struct {

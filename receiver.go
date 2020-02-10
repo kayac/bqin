@@ -11,9 +11,8 @@ import (
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sqs"
-	"github.com/aws/aws-sdk-go/service/sqs/sqsiface"
+	"github.com/kayac/bqin/cloud"
 	"github.com/kayac/bqin/internal/logger"
 	"github.com/lestrrat-go/backoff"
 )
@@ -23,8 +22,7 @@ var (
 )
 
 type SQSReceiver struct {
-	sqs    sqsiface.SQSAPI
-	finish bool
+	cloud *cloud.Cloud
 
 	mu        sync.Mutex
 	isChecked bool
@@ -33,17 +31,13 @@ type SQSReceiver struct {
 	queueName string
 }
 
-func NewSQSReceiver(sess *session.Session, conf *Config) (*SQSReceiver, error) {
-	return newSQSReceiver(conf, sqs.New(sess))
-}
-
-func newSQSReceiver(conf *Config, svc *sqs.SQS) (*SQSReceiver, error) {
+func NewSQSReceiver(conf *Config, c *cloud.Cloud) (*SQSReceiver, error) {
 	rules, err := conf.GetMergedRules()
 	if err != nil {
 		return nil, err
 	}
 	return &SQSReceiver{
-		sqs:       svc,
+		cloud:     c,
 		rules:     rules,
 		queueName: conf.QueueName,
 	}, nil
@@ -94,7 +88,7 @@ func (r *SQSReceiver) Complete(_ context.Context, req *ImportRequest) error {
 		}
 	}()
 
-	_, err := r.sqs.DeleteMessage(&sqs.DeleteMessageInput{
+	_, err := r.cloud.GetSQS().DeleteMessage(&sqs.DeleteMessageInput{
 		QueueUrl:      aws.String(r.queueURL),
 		ReceiptHandle: aws.String(req.ReceiptHandle),
 	})
@@ -104,7 +98,7 @@ func (r *SQSReceiver) Complete(_ context.Context, req *ImportRequest) error {
 		defer cancel()
 
 		for backoff.Continue(b) {
-			_, err = r.sqs.DeleteMessage(&sqs.DeleteMessageInput{
+			_, err = r.cloud.GetSQS().DeleteMessage(&sqs.DeleteMessageInput{
 				QueueUrl:      aws.String(r.queueURL),
 				ReceiptHandle: aws.String(req.ReceiptHandle),
 			})
@@ -131,7 +125,7 @@ func (r *SQSReceiver) check(ctx context.Context) error {
 
 	//first check only
 	logger.Infof("Connect to SQS: %s", r.queueName)
-	res, err := r.sqs.GetQueueUrlWithContext(ctx, &sqs.GetQueueUrlInput{
+	res, err := r.cloud.GetSQS().GetQueueUrlWithContext(ctx, &sqs.GetQueueUrlInput{
 		QueueName: aws.String(r.queueName),
 	})
 	if err != nil {
@@ -144,7 +138,7 @@ func (r *SQSReceiver) check(ctx context.Context) error {
 }
 
 func (r *SQSReceiver) receive(ctx context.Context) (*sqs.Message, error) {
-	res, err := r.sqs.ReceiveMessageWithContext(ctx, &sqs.ReceiveMessageInput{
+	res, err := r.cloud.GetSQS().ReceiveMessageWithContext(ctx, &sqs.ReceiveMessageInput{
 		MaxNumberOfMessages: aws.Int64(1),
 		QueueUrl:            aws.String(r.queueURL),
 	})

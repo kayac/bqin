@@ -8,13 +8,14 @@ import (
 	"cloud.google.com/go/bigquery"
 	"cloud.google.com/go/storage"
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/kayac/bqin/cloud"
 	"github.com/kayac/bqin/internal/logger"
 	"github.com/pkg/errors"
 )
 
 type BigQueryTransporter struct {
+	cloud *cloud.Cloud
 	s3svc *s3.S3
 	gcs   *storage.Client
 	bq    *bigquery.Client
@@ -22,30 +23,9 @@ type BigQueryTransporter struct {
 	temporaryBucket string
 }
 
-func NewBigQueryTransporter(conf *Config, sess *session.Session) (*BigQueryTransporter, error) {
-	ctx := context.Background()
-	gcs, err := storage.NewClient(ctx)
-	if err != nil {
-		return nil, err
-	}
-	bq, err := bigquery.NewClient(ctx, conf.GCP.ProjectID)
-	if err != nil {
-		return nil, err
-	}
-
-	return newBigQueryTransporter(
-		conf,
-		s3.New(sess),
-		gcs,
-		bq,
-	), nil
-}
-
-func newBigQueryTransporter(conf *Config, s3svc *s3.S3, gcs *storage.Client, bq *bigquery.Client) *BigQueryTransporter {
+func NewBigQueryTransporter(conf *Config, c *cloud.Cloud) *BigQueryTransporter {
 	return &BigQueryTransporter{
-		s3svc:           s3svc,
-		gcs:             gcs,
-		bq:              bq,
+		cloud:           c,
 		temporaryBucket: conf.GCSTemporaryBucket,
 	}
 }
@@ -75,7 +55,11 @@ func (t *BigQueryTransporter) check(ctx context.Context) (*storage.BucketHandle,
 	if t.temporaryBucket == "" {
 		return nil, errors.New("gcs temporary bucket name is missing. invalid config")
 	}
-	bucket := t.gcs.Bucket(t.temporaryBucket)
+	gcs, err := t.cloud.GetCloudStorageClient(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "can not get cloud storage client")
+	}
+	bucket := gcs.Bucket(t.temporaryBucket)
 	attr, err := bucket.Attrs(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "gcs temporary bucket attribute can not check")
@@ -85,9 +69,9 @@ func (t *BigQueryTransporter) check(ctx context.Context) (*storage.BucketHandle,
 	return bucket, nil
 }
 
-func (t *BigQueryTransporter) transfer(ctx context.Context, record *ImportRequestRecord, gbucket *storage.BucketHandle) (*storage.ObjectHandle, error) {
+func (t *BigQueryTransporter) transfer(ctx context.Context, record *ImportRequestRecord, bucket *storage.BucketHandle) (*storage.ObjectHandle, error) {
 
-	resp, err := t.s3svc.GetObjectWithContext(ctx, &s3.GetObjectInput{
+	resp, err := t.cloud.GetS3().GetObjectWithContext(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(record.Source.Bucket),
 		Key:    aws.String(record.Source.Object),
 	})
@@ -97,7 +81,7 @@ func (t *BigQueryTransporter) transfer(ctx context.Context, record *ImportReques
 	logger.Debugf("get object from %s successed.", record.Source)
 	defer resp.Body.Close()
 
-	obj := gbucket.Object(record.Source.Object)
+	obj := bucket.Object(record.Source.Object)
 	writer := obj.NewWriter(ctx)
 	defer writer.Close()
 
@@ -120,7 +104,12 @@ func (t *BigQueryTransporter) load(ctx context.Context, record *ImportRequestRec
 	gcsRef.AllowJaggedRows = true
 	logger.Debugf("prepre gcs reference: dump is %+v", gcsRef)
 
-	loader := t.bq.Dataset(record.Target.Dataset).Table(record.Target.Table).LoaderFrom(gcsRef)
+	bq, err := t.cloud.GetBigQueryClient(ctx, record.Target.ProjectID)
+	if err != nil {
+		return errors.Wrap(err, "can not get bigquery client")
+	}
+
+	loader := bq.Dataset(record.Target.Dataset).Table(record.Target.Table).LoaderFrom(gcsRef)
 	loader.CreateDisposition = bigquery.CreateIfNeeded
 
 	job, err := loader.Run(ctx)

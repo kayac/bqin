@@ -31,8 +31,9 @@ func TestProcess(t *testing.T) {
 							Object: "data/user/part-0001.csv",
 						},
 						Target: &bqin.ImportTarget{
-							Dataset: "test",
-							Table:   "user",
+							ProjectID: "bqin",
+							Dataset:   "test",
+							Table:     "user",
 						},
 					},
 				},
@@ -44,7 +45,7 @@ func TestProcess(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.casename, func(t *testing.T) {
 			logger.Setup(logger.NewTestingLogWriter(t), logger.DebugLevel)
-			processor, closer := bqin.NewProcessorWithStub(t, conf)
+			processor, closer := NewProcessorWithStub(t, conf)
 			defer closer()
 
 			err := processor.Process(context.Background(), c.req)

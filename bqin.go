@@ -8,8 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/kayac/bqin/cloud"
 	"github.com/kayac/bqin/internal/logger"
 )
 
@@ -38,8 +37,9 @@ func (s ImportSource) String() string {
 }
 
 type ImportTarget struct {
-	Dataset string `json:"dataset"`
-	Table   string `json:"table"`
+	ProjectID string `json:"project_id"`
+	Dataset   string `json:"dataset"`
+	Table     string `json:"table"`
 }
 
 type Receiver interface {
@@ -63,23 +63,15 @@ type App struct {
 }
 
 func NewApp(conf *Config) (*App, error) {
-	sess := session.Must(session.NewSessionWithOptions(session.Options{
-		Config:            aws.Config{Region: aws.String(conf.AWS.Region)},
-		SharedConfigState: session.SharedConfigEnable,
-	}))
-	receiver, err := NewSQSReceiver(sess, conf)
+	c := cloud.New(conf.Cloud)
+	receiver, err := NewSQSReceiver(conf, c)
 	if err != nil {
 		logger.Errorf("receiver build error :%s", err)
 		return nil, err
 	}
-	processor, err := NewBigQueryTransporter(conf, sess)
-	if err != nil {
-		logger.Errorf("processor build error :%s", err)
-		return nil, err
-	}
 	return &App{
 		Receiver:  receiver,
-		Processor: processor,
+		Processor: NewBigQueryTransporter(conf, c),
 	}, nil
 }
 

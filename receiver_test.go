@@ -25,7 +25,7 @@ func TestReceive(t *testing.T) {
 			casename: "success",
 			expected: &bqin.ImportRequest{
 				ID:            "5fea7756-0ea4-451a-a703-a558b933e274",
-				ReceiptHandle: bqin.StubReceiptHandle,
+				ReceiptHandle: StubReceiptHandle,
 				Records: []*bqin.ImportRequestRecord{
 					{
 						Source: &bqin.ImportSource{
@@ -55,7 +55,7 @@ func TestReceive(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.casename, func(t *testing.T) {
 			logger.Setup(logger.NewTestingLogWriter(t), logger.DebugLevel)
-			receiver, closer := bqin.NewReceiverWithStub(t, conf)
+			receiver, closer := NewReceiverWithStub(t, conf)
 			defer closer()
 
 			request, err := receiver.Receive(context.Background())
@@ -87,7 +87,7 @@ func TestComplete(t *testing.T) {
 			casename: "success",
 			request: &bqin.ImportRequest{
 				ID:            "5fea7756-0ea4-451a-a703-a558b933e274",
-				ReceiptHandle: bqin.StubReceiptHandle,
+				ReceiptHandle: StubReceiptHandle,
 				Records: []*bqin.ImportRequestRecord{
 					{
 						Source: &bqin.ImportSource{
@@ -107,7 +107,7 @@ func TestComplete(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.casename, func(t *testing.T) {
 			logger.Setup(logger.NewTestingLogWriter(t), logger.DebugLevel)
-			receiver, closer := bqin.NewReceiverWithStub(t, conf)
+			receiver, closer := NewReceiverWithStub(t, conf)
 			defer closer()
 
 			err := receiver.Complete(context.Background(), c.request)

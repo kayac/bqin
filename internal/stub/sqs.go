@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/aws/aws-sdk-go/service/sqs"
 	"github.com/kayac/bqin/internal/logger"
 )
 
@@ -24,10 +23,6 @@ func NewStubSQS(receiptHandle string) *StubSQS {
 	r := s.getRouter()
 	r.PathPrefix("/").HandlerFunc(s.serveHTTP).Methods("POST")
 	return s
-}
-
-func (s *StubSQS) NewSvc() *sqs.SQS {
-	return sqs.New(s.getAWSSession())
 }
 
 func (s *StubSQS) serveHTTP(w http.ResponseWriter, r *http.Request) {

@@ -25,17 +25,16 @@ Respected to http://github.com/fujiwara/Rin
 queue_name: my_queue_name    # SQS queue name
 gcs_temporary_bucket: my_bucket_name # GCP temporary bucket
 
-aws:
-  region: ap-northeast-1
-
-gcp:
-  project_id: bqin-test
+cloud:
+  aws:
+    region: ap-northeast-1
 
 s3:
   bucket: bqin.bucket.test
   region: ap-northeast-1
 
 big_query:
+  project_id: bqin-test
   dataset: test
 
 # define load rule
@@ -49,8 +48,9 @@ rules:
       table: $1_$2
     s3:
       key_regexp: data/(.+)/part-([0-9]+).csv
-  
+
   - big_query: # override default section in this rule
+      project_id: hoge
       dataset: bqin_test
       table: role
     s3:

@@ -1,13 +1,11 @@
 package stub
 
 import (
-	"context"
 	"encoding/json"
 	"io"
 	"net/http"
 	"net/url"
 
-	"cloud.google.com/go/bigquery"
 	"github.com/gorilla/mux"
 	"github.com/kayac/bqin/internal/logger"
 )
@@ -27,14 +25,6 @@ func NewStubBigQuery() *StubBigQuery {
 	r.HandleFunc("/projects/{project_id}/jobs/{job_id}", s.serveGetJob).Methods("GET")
 	r.HandleFunc("/projects/{project_id}/jobs", s.serveInsertJobs).Methods("POST")
 	return s
-}
-
-func (s *StubBigQuery) NewClient(projectID string) (*bigquery.Client, error) {
-	return bigquery.NewClient(
-		context.Background(),
-		projectID,
-		s.getGCPClientOptions()...,
-	)
 }
 
 //if not set project id, always return bad request

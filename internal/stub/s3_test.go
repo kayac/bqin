@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/kayac/bqin/internal/stub"
 	"github.com/kylelemons/godebug/pretty"
@@ -29,7 +31,14 @@ var stubS3ExpectedLogs = []string{
 func TestStubS3(t *testing.T) {
 	stubS3 := stub.NewStubS3("testdata/")
 	defer stubS3.Close()
-	svc := stubS3.NewSvc()
+	sess := session.Must(session.NewSession(&aws.Config{
+		Credentials:      credentials.NewStaticCredentials("AWS_KEY_ID", "AWS_SECRET_KEY", ""),
+		DisableSSL:       aws.Bool(true),
+		Endpoint:         aws.String(stubS3.Endpoint()),
+		Region:           aws.String("ap-northeast-1"),
+		S3ForcePathStyle: aws.Bool(true),
+	}))
+	svc := s3.New(sess)
 	for i, input := range stubS3TestInputs {
 		resp, err := svc.GetObject(&s3.GetObjectInput{
 			Bucket: aws.String(input[0]),

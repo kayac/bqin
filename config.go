@@ -2,12 +2,12 @@ package bqin
 
 import (
 	"fmt"
-	"os"
 	"regexp"
 	"strconv"
 	"strings"
 
 	"github.com/aws/aws-lambda-go/events"
+	"github.com/kayac/bqin/cloud"
 	goconfig "github.com/kayac/go-config"
 	"github.com/pkg/errors"
 )
@@ -20,19 +20,10 @@ const (
 type Config struct {
 	QueueName          string               `yaml:"queue_name"`
 	GCSTemporaryBucket string               `yaml:"gcs_temporary_bucket"`
-	AWS                *AWSConfig           `yaml:"aws"`
-	GCP                *GCPConfig           `yaml:"gcp"`
+	Cloud              *cloud.Config        `yaml:"cloud"`
 	S3                 *S3Soruce            `yaml:"s3"`
 	BigQuery           *BigQueryDestination `yaml:"big_query"`
 	Rules              []*Rule              `yaml:"rules"`
-}
-
-type AWSConfig struct {
-	Region string `yaml:"region"`
-}
-
-type GCPConfig struct {
-	ProjectID string `yaml:"project_id"`
 }
 
 type Rule struct {
@@ -42,8 +33,9 @@ type Rule struct {
 }
 
 type BigQueryDestination struct {
-	Table   string `yaml:"table"`
-	Dataset string `yaml:"dataset"`
+	ProjectID string `yaml:"project_id"`
+	Table     string `yaml:"table"`
+	Dataset   string `yaml:"dataset"`
 }
 
 func (bq BigQueryDestination) String() string {
@@ -65,19 +57,10 @@ func (s3 S3Soruce) String() string {
 	}
 }
 
-func newDefaultConfig() *Config {
-	return &Config{
-		AWS: &AWSConfig{
-			Region: os.Getenv("AWS_REGION"),
-		},
-		GCP: &GCPConfig{
-			ProjectID: os.Getenv("GCP_PROJECT_ID"),
-		},
-	}
-}
-
 func LoadConfig(path string) (*Config, error) {
-	conf := newDefaultConfig()
+	conf := &Config{
+		Cloud: cloud.NewDefaultConfig(),
+	}
 	err := goconfig.LoadWithEnv(conf, path)
 	return conf, err
 }
