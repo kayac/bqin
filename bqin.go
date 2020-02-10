@@ -76,13 +76,6 @@ func NewApp(conf *Config) (*App, error) {
 }
 
 func (app *App) ReceiveAndProcess() error {
-	if app.Receiver == nil {
-		return errors.New("Receiver is nil")
-	}
-
-	if app.Processor == nil {
-		return errors.New("Processor is nil")
-	}
 	logger.Infof("Starting up bqin worker")
 	defer logger.Infof("Shutdown bqin worker")
 
@@ -97,25 +90,32 @@ func (app *App) ReceiveAndProcess() error {
 			return nil
 		default:
 		}
-
-		req, err := app.Receive(ctx)
-		switch err {
-		case nil:
-			// next step.
-		case ErrNoRequest:
-			continue
-		default:
-			return err
-		}
-
-		if err := app.Process(ctx, req); err != nil {
-			return err
-		}
-
-		if err := app.Complete(ctx, req); err != nil {
+		if err := app.OneReceiveAndProcess(ctx); err != nil && err != ErrNoRequest {
 			return err
 		}
 	}
+}
+
+func (app *App) OneReceiveAndProcess(ctx context.Context) error {
+	if app.Receiver == nil {
+		return errors.New("Receiver is nil")
+	}
+
+	if app.Processor == nil {
+		return errors.New("Processor is nil")
+	}
+	req, err := app.Receive(ctx)
+	if err != nil {
+		return err
+	}
+	if err := app.Process(ctx, req); err != nil {
+		return err
+	}
+
+	if err := app.Complete(ctx, req); err != nil {
+		return err
+	}
+	return nil
 }
 
 var shutdownPollInterval = 500 * time.Millisecond

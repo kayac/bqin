@@ -9,6 +9,7 @@ require (
 	github.com/aws/aws-sdk-go v1.28.9
 	github.com/cenkalti/backoff v2.2.1+incompatible // indirect
 	github.com/google/subcommands v1.2.0
+	github.com/google/uuid v1.1.1
 	github.com/gorilla/mux v1.7.3
 	github.com/hashicorp/logutils v1.0.0
 	github.com/kayac/go-config v0.1.0
@@ -16,4 +17,5 @@ require (
 	github.com/lestrrat-go/backoff v1.0.0
 	github.com/pkg/errors v0.9.1
 	google.golang.org/api v0.9.0
+	gopkg.in/yaml.v2 v2.2.2
 )

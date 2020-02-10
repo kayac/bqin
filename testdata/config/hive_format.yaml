@@ -1,0 +1,16 @@
+queue_name: s3_to_bq
+gcs_temporary_bucket: bqin-import-tmp
+
+s3:
+  bucket: bqin.bucket.test
+  region: ap-northeast-1
+
+big_query:
+  project_id: bqin-test-gcp
+  dataset: test
+
+rules:
+  - big_query:
+      table: $1_$2
+    s3:
+      key_regexp: data/(.+)/snapshot_at=([0-9]{8})/.+

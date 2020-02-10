@@ -1,18 +1,20 @@
 package stub
 
 import (
-	"crypto/md5"
+	"encoding/xml"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
 
+	"github.com/aws/aws-sdk-go/service/sqs"
 	"github.com/kayac/bqin/internal/logger"
 )
 
 type StubSQS struct {
 	stub
+	msgs          []*sqs.Message
 	receiptHandle string
 }
 
@@ -23,6 +25,11 @@ func NewStubSQS(receiptHandle string) *StubSQS {
 	r := s.getRouter()
 	r.PathPrefix("/").HandlerFunc(s.serveHTTP).Methods("POST")
 	return s
+}
+
+func (s *StubSQS) SetRecivedMessages(msgs []*sqs.Message) {
+	s.msgs = make([]*sqs.Message, 0, len(msgs))
+	s.msgs = append(s.msgs, msgs...)
 }
 
 func (s *StubSQS) serveHTTP(w http.ResponseWriter, r *http.Request) {
@@ -58,28 +65,47 @@ func (s *StubSQS) serveGetQueueUrl(w http.ResponseWriter, r *http.Request, param
 		),
 	)
 }
+
 func (s *StubSQS) serveReceiveMessage(w http.ResponseWriter, r *http.Request, params url.Values) {
 	w.WriteHeader(http.StatusOK)
-	bodyBs, _ := ioutil.ReadFile("testdata/sqs_msg/s3_object_created_put.json")
-	io.WriteString(
-		w,
-		fmt.Sprintf(
-			stubSQSReceiveMessageResponseTmpl,
-			s.receiptHandle,
-			md5.Sum(bodyBs),
-			string(bodyBs),
-		),
-	)
+	payload := ""
+	if len(s.msgs) > 0 {
+		msg := s.msgs[0]
+		msgStrct := struct {
+			XMLName       xml.Name `xml:"Message"`
+			MessageId     string   `xml:"MessageId"`
+			ReceiptHandle string   `xml:"ReceiptHandle"`
+			Body          string   `xml:"Body"`
+			MD5OfBody     string   `xml:"MD5OfBody"`
+		}{
+			MessageId:     getString(msg.MessageId),
+			ReceiptHandle: getString(msg.ReceiptHandle),
+			Body:          getString(msg.Body),
+			MD5OfBody:     getString(msg.MD5OfBody),
+		}
+
+		payloadBs, err := xml.Marshal(msgStrct)
+		if err != nil {
+			logger.Debugf("[stub_sqs] sqs.Message can not Marshal :%s", err)
+		}
+		payload = string(payloadBs)
+	}
+	response := fmt.Sprintf(stubSQSReceiveMessageResponseTmpl, payload)
+	io.WriteString(w, response)
 }
+
 func (s *StubSQS) serveDeleteMessage(w http.ResponseWriter, r *http.Request, params url.Values) {
 	handle := params.Get("ReceiptHandle")
-	if handle != s.receiptHandle {
-		w.WriteHeader(http.StatusBadRequest)
-		io.WriteString(w, "ReceiptHandleIsInvalid")
-		return
+	for i, msg := range s.msgs {
+		if handle == getString(msg.ReceiptHandle) {
+			s.msgs = append(s.msgs[0:i], s.msgs[i+1:len(s.msgs)]...)
+			w.WriteHeader(http.StatusOK)
+			io.WriteString(w, stubSQSDeleteMessageResponseTmpl)
+			return
+		}
 	}
-	w.WriteHeader(http.StatusOK)
-	io.WriteString(w, stubSQSDeleteMessageResponseTmpl)
+	w.WriteHeader(http.StatusBadRequest)
+	io.WriteString(w, "ReceiptHandleIsInvalid")
 }
 
 const (
@@ -97,30 +123,7 @@ const (
 	// see https://docs.aws.amazon.com/AWSSimpleQueueService/latest/APIReference/API_ReceiveMessage.html
 	stubSQSReceiveMessageResponseTmpl = `
 <ReceiveMessageResponse>
-  <ReceiveMessageResult>
-    <Message>
-      <MessageId>5fea7756-0ea4-451a-a703-a558b933e274</MessageId>
-      <ReceiptHandle>%s</ReceiptHandle>
-      <MD5OfBody>%x</MD5OfBody>
-      <Body>%s</Body>
-      <Attribute>
-        <Name>SenderId</Name>
-        <Value>195004372649</Value>
-      </Attribute>
-      <Attribute>
-        <Name>SentTimestamp</Name>
-        <Value>1238099229000</Value>
-      </Attribute>
-      <Attribute>
-        <Name>ApproximateReceiveCount</Name>
-        <Value>5</Value>
-      </Attribute>
-      <Attribute>
-        <Name>ApproximateFirstReceiveTimestamp</Name>
-        <Value>1250700979248</Value>
-      </Attribute>
-    </Message>
-  </ReceiveMessageResult>
+  <ReceiveMessageResult>%s</ReceiveMessageResult>
   <ResponseMetadata>
     <RequestId>b6633655-283d-45b4-aee4-4e84e0ae6afa</RequestId>
   </ResponseMetadata>
@@ -136,3 +139,10 @@ const (
 </DeleteMessageResponse>
 `
 )
+
+func getString(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}

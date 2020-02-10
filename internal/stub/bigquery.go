@@ -2,6 +2,7 @@ package stub
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -13,11 +14,13 @@ import (
 type StubBigQuery struct {
 	stub
 	createdJobs map[string]*StubBigQueryResponseJob
+	loaded      map[string][]string
 }
 
 func NewStubBigQuery() *StubBigQuery {
 	s := &StubBigQuery{
 		createdJobs: make(map[string]*StubBigQueryResponseJob, 1),
+		loaded:      make(map[string][]string, 0),
 	}
 	s.setSvcName("bigquery")
 	r := s.getRouter()
@@ -104,6 +107,12 @@ func (s *StubBigQuery) serveGetJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	job.Status.State = "DONE"
+	target := job.Configuration.Load.DestinationTable.String()
+	if _, ok := s.loaded[target]; !ok {
+		s.loaded[target] = make([]string, 0, len(job.Configuration.Load.SourceUris))
+	}
+	s.loaded[target] = append(s.loaded[target], job.Configuration.Load.SourceUris...)
+
 	w.WriteHeader(http.StatusOK)
 	encoder := json.NewEncoder(w)
 	if err := encoder.Encode(job); err != nil {
@@ -112,6 +121,10 @@ func (s *StubBigQuery) serveGetJob(w http.ResponseWriter, r *http.Request) {
 	}
 	logger.Debugf("[stub_bigquery] job done id = %s", job.ID)
 
+}
+
+func (s *StubBigQuery) LoadedData() map[string][]string {
+	return s.loaded
 }
 
 //as https://cloud.google.com/bigquery/docs/reference/rest/v2/Job?hl=ja
@@ -165,31 +178,42 @@ type StubBigQueryResponseJobConfiguration struct {
 
 //as https://cloud.google.com/bigquery/docs/reference/rest/v2/Job?hl=ja#JobConfigurationLoad
 type StubBigQueryResponseJobConfigurationLoad struct {
-	SourceUris                         []string    `json:"sourceUris"`
-	Schema                             interface{} `json:"schema"`
-	DestinationTable                   interface{} `json:"destinationTable"`
-	DestinationTableProperties         interface{} `json:"destinationTableProperties"`
-	CreateDisposition                  string      `json:"createDisposition"`
-	WriteDisposition                   string      `json:"writeDisposition"`
-	NullMarker                         string      `json:"nullMarker"`
-	FieldDelimiter                     string      `json:"fieldDelimiter"`
-	SkipLeadingRows                    int         `json:"skipLeadingRows"`
-	Encoding                           string      `json:"encoding"`
-	Quote                              string      `json:"quote"`
-	MaxBadRecords                      int         `json:"maxBadRecords"`
-	SchemaInlineFormat                 string      `json:"schemaInlineFormat"`
-	SchemaInline                       string      `json:"schemaInline"`
-	AllowQuotedNewlines                bool        `json:"allowQuotedNewlines"`
-	SourceFormat                       string      `json:"sourceFormat"`
-	AllowJaggedRows                    bool        `json:"allowJaggedRows"`
-	IgnoreUnknownValues                bool        `json:"ignoreUnknownValues"`
-	ProjectionFields                   []string    `json:"projectionFields"`
-	Autodetect                         bool        `json:"autodetect"`
-	SchemaUpdateOptions                []string    `json:"schemaUpdateOptions"`
-	TimePartitioning                   interface{} `json:"timePartitioning"`
-	RangePartitioning                  interface{} `json:"rangePartitioning"`
-	Clustering                         interface{} `json:"clustering"`
-	DestinationEncryptionConfiguration interface{} `json:"destinationEncryptionConfiguration"`
-	UseAvroLogicalTypes                bool        `json:"useAvroLogicalTypes"`
-	HivePartitioningOptions            interface{} `json:"hivePartitioningOptions"`
+	SourceUris                         []string                              `json:"sourceUris"`
+	Schema                             interface{}                           `json:"schema"`
+	DestinationTable                   *StubBigQueryResponseDestinationTable `json:"destinationTable"`
+	DestinationTableProperties         interface{}                           `json:"destinationTableProperties"`
+	CreateDisposition                  string                                `json:"createDisposition"`
+	WriteDisposition                   string                                `json:"writeDisposition"`
+	NullMarker                         string                                `json:"nullMarker"`
+	FieldDelimiter                     string                                `json:"fieldDelimiter"`
+	SkipLeadingRows                    int                                   `json:"skipLeadingRows"`
+	Encoding                           string                                `json:"encoding"`
+	Quote                              string                                `json:"quote"`
+	MaxBadRecords                      int                                   `json:"maxBadRecords"`
+	SchemaInlineFormat                 string                                `json:"schemaInlineFormat"`
+	SchemaInline                       string                                `json:"schemaInline"`
+	AllowQuotedNewlines                bool                                  `json:"allowQuotedNewlines"`
+	SourceFormat                       string                                `json:"sourceFormat"`
+	AllowJaggedRows                    bool                                  `json:"allowJaggedRows"`
+	IgnoreUnknownValues                bool                                  `json:"ignoreUnknownValues"`
+	ProjectionFields                   []string                              `json:"projectionFields"`
+	Autodetect                         bool                                  `json:"autodetect"`
+	SchemaUpdateOptions                []string                              `json:"schemaUpdateOptions"`
+	TimePartitioning                   interface{}                           `json:"timePartitioning"`
+	RangePartitioning                  interface{}                           `json:"rangePartitioning"`
+	Clustering                         interface{}                           `json:"clustering"`
+	DestinationEncryptionConfiguration interface{}                           `json:"destinationEncryptionConfiguration"`
+	UseAvroLogicalTypes                bool                                  `json:"useAvroLogicalTypes"`
+	HivePartitioningOptions            interface{}                           `json:"hivePartitioningOptions"`
+}
+
+// as https://cloud.google.com/bigquery/docs/reference/rest/v2/TableReference?hl=ja
+type StubBigQueryResponseDestinationTable struct {
+	ProjectID string `json:"projectId"`
+	DatasetID string `json:"datasetId"`
+	TableID   string `json:"tableId"`
+}
+
+func (t *StubBigQueryResponseDestinationTable) String() string {
+	return fmt.Sprintf("%s.%s.%s", t.ProjectID, t.DatasetID, t.TableID)
 }

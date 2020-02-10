@@ -27,7 +27,7 @@
                "arn":"arn:aws:s3:::bqin.bucket.test"
             },
             "object":{
-               "key":"data/user/part-0001.csv",
+               "key":"data/user/snapshot_at=20200210/part-0001.csv",
                "size":1024,
                "eTag":"d41d8cd98f00b204e9800998ecf8427e",
                "versionId":"096fKKXTRTtl3on89fVO.nfljtsv6qko",
@@ -37,3 +37,4 @@
       }
    ]
 }
+

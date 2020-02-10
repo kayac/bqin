@@ -22,7 +22,12 @@ func NewStubS3(basePath string) *StubS3 {
 }
 
 func (s *StubS3) serveObject(w http.ResponseWriter, r *http.Request) {
-	testdataPath := s.basePath + r.URL.Path
+	path := r.URL.Path
+	if path[0] == '/' {
+		path = path[1:]
+	}
+	testdataPath := s.basePath + path
+	logger.Debugf("%v", testdataPath)
 	body, err := os.Open(testdataPath)
 	if err != nil {
 		logger.Debugf("[stub_s3] %s", err)

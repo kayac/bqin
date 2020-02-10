@@ -12,6 +12,7 @@ import (
 
 type StubGCS struct {
 	stub
+	storage map[string]bool
 }
 
 func NewStubGCS() *StubGCS {
@@ -62,8 +63,8 @@ func (s *StubGCS) serveInsertObject(w http.ResponseWriter, r *http.Request) {
 	}
 	bs := make([]byte, 256)
 	n, _ := part.Read(bs)
-	var data map[string]string
-	json.Unmarshal(bs[0:n], &data)
-	logger.Debugf("[stub_gcs]:upload palyload :%v", data)
+	var meta map[string]string
+	json.Unmarshal(bs[0:n], &meta)
+	logger.Debugf("[stub_gcs]:upload palyload :%v", meta)
 	w.WriteHeader(http.StatusOK)
 }
