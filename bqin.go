@@ -108,6 +108,7 @@ func (app *App) OneReceiveAndProcess(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	logger.InfoDump(req)
 	if err := app.Process(ctx, req); err != nil {
 		return err
 	}

@@ -8,6 +8,7 @@ import (
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/kayac/bqin/cloud"
+	"github.com/kayac/bqin/internal/logger"
 	goconfig "github.com/kayac/go-config"
 	"github.com/pkg/errors"
 )
@@ -144,6 +145,7 @@ func (r *Rule) buildKeyMacher() error {
 }
 
 func (r *Rule) Match(bucket, key string) (bool, []string) {
+	logger.Debugf("try match `s3://%s/%s` to `%s`", bucket, key, r.String())
 	if bucket != r.S3.Bucket {
 		return false, nil
 	}

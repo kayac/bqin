@@ -1,6 +1,7 @@
 package logger
 
 import (
+	"encoding/json"
 	"io"
 	"log"
 
@@ -36,4 +37,17 @@ func Errorf(format string, args ...interface{}) {
 
 func printf(level, format string, args ...interface{}) {
 	log.Printf("["+level+"] "+format, args...)
+}
+
+func InfoDump(v interface{}) {
+	dump(InfoLevel, v)
+}
+
+func dump(level string, v interface{}) {
+	s, err := json.Marshal(v)
+	if err != nil {
+		printf(level, "%+v", v)
+		return
+	}
+	printf(level, string(s))
 }
