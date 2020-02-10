@@ -102,6 +102,9 @@ func mergeRule(defaultRule *Rule, baseRule *Rule) (*Rule, error) {
 	if ret.BigQuery == nil {
 		ret.BigQuery = defaultRule.BigQuery
 	} else {
+		if ret.BigQuery.ProjectID == "" {
+			ret.BigQuery.ProjectID = defaultRule.BigQuery.ProjectID
+		}
 		if ret.BigQuery.Dataset == "" {
 			ret.BigQuery.Dataset = defaultRule.BigQuery.Dataset
 		}
@@ -168,7 +171,8 @@ func expandPlaceHolder(s string, capture []string) string {
 
 func (r *Rule) BuildImportTarget(capture []string) *ImportTarget {
 	return &ImportTarget{
-		Dataset: expandPlaceHolder(r.BigQuery.Dataset, capture),
-		Table:   expandPlaceHolder(r.BigQuery.Table, capture),
+		ProjectID: expandPlaceHolder(r.BigQuery.ProjectID, capture),
+		Dataset:   expandPlaceHolder(r.BigQuery.Dataset, capture),
+		Table:     expandPlaceHolder(r.BigQuery.Table, capture),
 	}
 }
