@@ -166,12 +166,13 @@ func (r *SQSReceiver) parse(msg *sqs.Message) (*events.S3Event, error) {
 	dec := json.NewDecoder(strings.NewReader(*msg.Body))
 	var event events.S3Event
 	err := dec.Decode(&event)
-	for _, record := range event.Records {
-		if !strings.Contains(record.S3.Object.Key, "%") {
+	for i, _ := range event.Records {
+		event.Records[i].S3.Object.URLDecodedKey = event.Records[i].S3.Object.Key
+		if !strings.Contains(event.Records[i].S3.Object.Key, "%") {
 			continue
 		}
-		if _key, err := url.QueryUnescape(record.S3.Object.Key); err == nil {
-			record.S3.Object.URLDecodedKey = _key
+		if _key, err := url.QueryUnescape(event.Records[i].S3.Object.Key); err == nil {
+			event.Records[i].S3.Object.URLDecodedKey = _key
 		}
 	}
 
@@ -190,7 +191,7 @@ func (r *SQSReceiver) convert(event *events.S3Event) []*ImportRequestRecord {
 			ret = append(ret, &ImportRequestRecord{
 				Source: &ImportSource{
 					Bucket: record.S3.Bucket.Name,
-					Object: record.S3.Object.Key,
+					Object: record.S3.Object.URLDecodedKey,
 				},
 				Target: rule.BuildImportTarget(capture),
 			})

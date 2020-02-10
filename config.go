@@ -148,6 +148,9 @@ func (r *Rule) Match(bucket, key string) (bool, []string) {
 }
 
 func (r *Rule) MatchEventRecord(record events.S3EventRecord) (bool, []string) {
+	if record.S3.Object.URLDecodedKey != "" {
+		return r.Match(record.S3.Bucket.Name, record.S3.Object.URLDecodedKey)
+	}
 	return r.Match(record.S3.Bucket.Name, record.S3.Object.Key)
 }
 
