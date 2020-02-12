@@ -64,13 +64,8 @@ type App struct {
 
 func NewApp(conf *Config) (*App, error) {
 	c := cloud.New(conf.Cloud)
-	receiver, err := NewSQSReceiver(conf, c)
-	if err != nil {
-		logger.Errorf("receiver build error :%s", err)
-		return nil, err
-	}
 	return &App{
-		Receiver:  receiver,
+		Receiver:  NewSQSReceiver(conf, c),
 		Processor: NewBigQueryTransporter(conf, c),
 	}, nil
 }

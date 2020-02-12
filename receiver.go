@@ -31,16 +31,12 @@ type SQSReceiver struct {
 	queueName string
 }
 
-func NewSQSReceiver(conf *Config, c *cloud.Cloud) (*SQSReceiver, error) {
-	rules, err := conf.GetMergedRules()
-	if err != nil {
-		return nil, err
-	}
+func NewSQSReceiver(conf *Config, c *cloud.Cloud) *SQSReceiver {
 	return &SQSReceiver{
 		cloud:     c,
-		rules:     rules,
+		rules:     conf.Rules,
 		queueName: conf.QueueName,
-	}, nil
+	}
 }
 
 func (r *SQSReceiver) Receive(ctx context.Context) (*ImportRequest, error) {
