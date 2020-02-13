@@ -63,6 +63,7 @@ func TestLoadConfig(t *testing.T) {
 			{path: "testdata/config/broken_invalid_key_regexp.yaml"},
 			{path: "testdata/config/broken_no_queue_name.yaml"},
 			{path: "testdata/config/broken_no_key_matcher.yaml"},
+			{path: "testdata/config/broken_no_tempbucket_option.yaml"},
 		}
 		for _, p := range patterns {
 			t.Run(p.path, func(t *testing.T) {

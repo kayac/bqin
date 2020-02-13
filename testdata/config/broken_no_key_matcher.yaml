@@ -1,5 +1,4 @@
 queue_name: s3_to_bq
-gcs_temporary_bucket: bqin-import-tmp
 
 s3:
   bucket: bqin.bucket.test
@@ -8,6 +7,9 @@ s3:
 big_query:
   project_id: bqin-test-gcp
   dataset: test
+
+option:
+  temporary_bucket: bqin-import-tmp
 
 rules:
   - big_query:

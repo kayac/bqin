@@ -3,7 +3,6 @@ package bqin
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -20,26 +19,6 @@ type ImportRequest struct {
 	ID            string                 `json:"id,omitempty"`
 	ReceiptHandle string                 `json:"receipt_handle,omitempty"`
 	Records       []*ImportRequestRecord `json:"records"`
-}
-
-type ImportRequestRecord struct {
-	Source *ImportSource `json:"source"`
-	Target *ImportTarget `json:"target"`
-}
-
-type ImportSource struct {
-	Bucket string `json:"bucket"`
-	Object string `json:"object"`
-}
-
-func (s ImportSource) String() string {
-	return fmt.Sprintf(S3URITemplate, s.Bucket, s.Object)
-}
-
-type ImportTarget struct {
-	ProjectID string `json:"project_id"`
-	Dataset   string `json:"dataset"`
-	Table     string `json:"table"`
 }
 
 type Receiver interface {

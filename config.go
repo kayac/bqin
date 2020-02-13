@@ -7,9 +7,8 @@ import (
 )
 
 type Config struct {
-	QueueName          string        `yaml:"queue_name"`
-	GCSTemporaryBucket string        `yaml:"gcs_temporary_bucket"`
-	Cloud              *cloud.Config `yaml:"cloud"`
+	QueueName string        `yaml:"queue_name"`
+	Cloud     *cloud.Config `yaml:"cloud"`
 
 	Rules []*Rule `yaml:"rules"`
 	Rule  `yaml:",inline"`
@@ -32,9 +31,6 @@ func LoadConfig(path string) (*Config, error) {
 func (c *Config) Validate() error {
 	if c.QueueName == "" {
 		return errors.New("queue_name is not defined")
-	}
-	if c.GCSTemporaryBucket == "" {
-		return errors.New("gcs_temporary_bucket is not defined")
 	}
 	if len(c.Rules) == 0 {
 		return errors.New("rules is not defined")

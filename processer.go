@@ -19,24 +19,21 @@ type BigQueryTransporter struct {
 	s3svc *s3.S3
 	gcs   *storage.Client
 	bq    *bigquery.Client
-
-	temporaryBucket string
 }
 
 func NewBigQueryTransporter(conf *Config, c *cloud.Cloud) *BigQueryTransporter {
 	return &BigQueryTransporter{
-		cloud:           c,
-		temporaryBucket: conf.GCSTemporaryBucket,
+		cloud: c,
 	}
 }
 
 func (t *BigQueryTransporter) Process(ctx context.Context, req *ImportRequest) error {
 
-	bucket, err := t.check(ctx)
-	if err != nil {
-		return errors.Wrap(err, "Process.check condition invalid")
-	}
 	for _, record := range req.Records {
+		bucket, err := t.check(ctx, record.Option)
+		if err != nil {
+			return errors.Wrap(err, "Process.check condition invalid")
+		}
 		obj, err := t.transfer(ctx, record, bucket)
 		if err != nil {
 			return errors.Wrap(err, "Process.transfer")
@@ -51,15 +48,12 @@ func (t *BigQueryTransporter) Process(ctx context.Context, req *ImportRequest) e
 	return nil
 }
 
-func (t *BigQueryTransporter) check(ctx context.Context) (*storage.BucketHandle, error) {
-	if t.temporaryBucket == "" {
-		return nil, errors.New("gcs temporary bucket name is missing. invalid config")
-	}
+func (t *BigQueryTransporter) check(ctx context.Context, opt *ImportOption) (*storage.BucketHandle, error) {
 	gcs, err := t.cloud.GetCloudStorageClient(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "can not get cloud storage client")
 	}
-	bucket := gcs.Bucket(t.temporaryBucket)
+	bucket := gcs.Bucket(opt.TemporaryBucket)
 	attr, err := bucket.Attrs(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "gcs temporary bucket attribute can not check")
@@ -94,7 +88,7 @@ func (t *BigQueryTransporter) transfer(ctx context.Context, record *ImportReques
 }
 
 func (t *BigQueryTransporter) tmpObjectURL(record *ImportRequestRecord) string {
-	return fmt.Sprintf("gs://%s/%s", t.temporaryBucket, record.Source.Object)
+	return fmt.Sprintf("gs://%s/%s", record.Option.TemporaryBucket, record.Source.Object)
 }
 
 func (t *BigQueryTransporter) load(ctx context.Context, record *ImportRequestRecord) error {

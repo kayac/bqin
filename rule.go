@@ -19,14 +19,15 @@ const (
 type Rule struct {
 	S3       *S3Soruce            `yaml:"s3"`
 	BigQuery *BigQueryDestination `yaml:"big_query"`
+	Option   *ImportOption        `yaml:"option"`
 
 	keyMatcher func(string) (bool, []string)
 }
 
 type BigQueryDestination struct {
-	ProjectID string `yaml:"project_id"`
-	Table     string `yaml:"table"`
-	Dataset   string `yaml:"dataset"`
+	ProjectID string `yaml:"project_id" json:"project_id"`
+	Table     string `yaml:"table" json:"table"`
+	Dataset   string `yaml:"dataset" json:"dataset"`
 }
 
 type S3Soruce struct {
@@ -34,6 +35,25 @@ type S3Soruce struct {
 	Bucket    string `yaml:"bucket"`
 	KeyPrefix string `yaml:"key_prefix"`
 	KeyRegexp string `yaml:"key_regexp"`
+}
+
+type ImportOption struct {
+	TemporaryBucket string `yaml:"temporary_bucket" json:"temporary_bucket"`
+}
+
+type S3Object struct {
+	Bucket string `json:"bucket"`
+	Object string `json:"object"`
+}
+
+func (s S3Object) String() string {
+	return fmt.Sprintf(S3URITemplate, s.Bucket, s.Object)
+}
+
+type ImportRequestRecord struct {
+	Source *S3Object            `json:"source"`
+	Target *BigQueryDestination `json:"target"`
+	Option *ImportOption        `json:"option"`
 }
 
 func (r *Rule) Validate() error {
@@ -45,6 +65,12 @@ func (r *Rule) Validate() error {
 	}
 	if r.BigQuery.Table == "" {
 		return errors.New("rule.bigquery.table is not defined")
+	}
+	if r.Option == nil {
+		return errors.New("rule.option is not defined")
+	}
+	if r.Option.TemporaryBucket == "" {
+		return errors.New("rule.option.temporary_bucket is not defined")
 	}
 	return r.buildKeyMacher()
 }
@@ -77,7 +103,7 @@ func (r *Rule) buildKeyMacher() error {
 }
 
 //Match must after Valicate
-func (r *Rule) Match(bucket, key string) (bool, []string) {
+func (r *Rule) match(bucket, key string) (bool, []string) {
 	logger.Debugf("try match `s3://%s/%s` to `%s`", bucket, key, r.String())
 	if bucket != r.S3.Bucket {
 		return false, nil
@@ -85,8 +111,16 @@ func (r *Rule) Match(bucket, key string) (bool, []string) {
 	return r.keyMatcher(key)
 }
 
+func (r *Rule) Match(bucket, key string) (bool, *ImportRequestRecord) {
+	ok, capture := r.match(bucket, key)
+	if !ok {
+		return false, nil
+	}
+	return true, r.buildImportRequestRecord(bucket, key, capture)
+}
+
 //MatchEventRecord must after Valicate
-func (r *Rule) MatchEventRecord(record events.S3EventRecord) (bool, []string) {
+func (r *Rule) MatchEventRecord(record events.S3EventRecord) (bool, *ImportRequestRecord) {
 	if record.S3.Object.URLDecodedKey != "" {
 		return r.Match(record.S3.Bucket.Name, record.S3.Object.URLDecodedKey)
 	}
@@ -105,11 +139,20 @@ func expandPlaceHolder(s string, capture []string) string {
 	return s
 }
 
-func (r *Rule) BuildImportTarget(capture []string) *ImportTarget {
-	return &ImportTarget{
-		ProjectID: expandPlaceHolder(r.BigQuery.ProjectID, capture),
-		Dataset:   expandPlaceHolder(r.BigQuery.Dataset, capture),
-		Table:     expandPlaceHolder(r.BigQuery.Table, capture),
+func (r *Rule) buildImportRequestRecord(bucket, key string, capture []string) *ImportRequestRecord {
+	return &ImportRequestRecord{
+		Source: &S3Object{
+			Bucket: bucket,
+			Object: key,
+		},
+		Target: &BigQueryDestination{
+			ProjectID: expandPlaceHolder(r.BigQuery.ProjectID, capture),
+			Dataset:   expandPlaceHolder(r.BigQuery.Dataset, capture),
+			Table:     expandPlaceHolder(r.BigQuery.Table, capture),
+		},
+		Option: &ImportOption{
+			TemporaryBucket: expandPlaceHolder(r.Option.TemporaryBucket, capture),
+		},
 	}
 }
 
@@ -134,6 +177,12 @@ func (r *Rule) MergeIn(other *Rule) {
 		r.BigQuery = other.BigQuery.Clone()
 	} else {
 		r.BigQuery.MergeIn(other.BigQuery)
+	}
+
+	if r.Option == nil {
+		r.Option = other.Option.Clone()
+	} else {
+		r.Option.MergeIn(other.Option)
 	}
 }
 
@@ -191,5 +240,20 @@ func (bq *BigQueryDestination) MergeIn(other *BigQueryDestination) {
 	}
 	if bq.Table == "" {
 		bq.Table = other.Table
+	}
+}
+
+func (o *ImportOption) Clone() *ImportOption {
+	ret := &ImportOption{}
+	ret.MergeIn(o)
+	return ret
+}
+
+func (o *ImportOption) MergeIn(other *ImportOption) {
+	if other == nil {
+		return
+	}
+	if o.TemporaryBucket == "" {
+		o.TemporaryBucket = other.TemporaryBucket
 	}
 }
