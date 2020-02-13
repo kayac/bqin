@@ -1,4 +1,5 @@
 # BQin
+[![CircleCI](https://circleci.com/gh/kayac/bqin/tree/master.svg?style=svg)](https://circleci.com/gh/kayac/bqin/tree/master)
 
 BQin is a BigQuery data importer with AWS S3 and SQS messaging.  
 Respected to http://github.com/fujiwara/Rin  
@@ -23,7 +24,6 @@ Respected to http://github.com/fujiwara/Rin
 ### config.yaml
 ```
 queue_name: my_queue_name    # SQS queue name
-gcs_temporary_bucket: my_bucket_name # GCP temporary bucket
 
 cloud:
   aws:
@@ -36,6 +36,9 @@ s3:
 big_query:
   project_id: bqin-test
   dataset: test
+
+option:
+  temporary_bucket: my_bucket_name # GCP temporary bucket
 
 # define load rule
 rules:
