@@ -1,0 +1,27 @@
+queue_name: s3_to_bq
+
+cloud:
+  gcp:
+    credential: |
+      {{ must_env "GCP_CREDENTIAL" }}
+s3:
+  bucket: bqin.bucket.test
+  region: ap-northeast-1
+
+big_query:
+  project_id: bqin-test-gcp
+  dataset: test
+
+option:
+  temporary_bucket: bqin-import-tmp
+
+rules:
+  - big_query:
+      table: user
+    s3:
+      key_prefix: data/user
+  - big_query:
+      table: $1_$2
+    s3:
+      bucket: bqin.bucket.test
+      key_regexp: data/(.+)/part-([0-9]+).csv
