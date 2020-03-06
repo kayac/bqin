@@ -46,9 +46,8 @@ credential: |
 	if err != nil {
 		t.Fatalf("unexpected new client error: %s", err)
 	}
-	trans, ok := client.Transport.(*oauth2.Transport)
-	if !ok {
-		t.Fatalf("unexpected client transport type: %#v", client)
+	if trans, ok := client.Transport.(*oauth2.Transport); !ok {
+		t.Fatalf("unexpected client transport type: %#v", trans)
 	}
 }
 
