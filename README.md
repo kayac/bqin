@@ -39,6 +39,7 @@ big_query:
 
 option:
   temporary_bucket: my_bucket_name # GCP temporary bucket
+  gzip: true
 
 # define load rule
 rules:
@@ -59,6 +60,8 @@ rules:
     s3:
       bucket: bqin.bucket.test
       key_prefix: data/role
+    option:
+      gzip: false
 ```
 
 A configuration file is parsed by [kayac/go-config](https://github.com/kayac/go-config).
@@ -105,8 +108,12 @@ request file format as
                 "object":"data/user/part-0001.csv"
             },
             "target":{
-               "dataset":"bqin",
-               "table":"user_20200101"
+                "dataset":"bqin",
+                "table":"user_20200101"
+            }
+            "option": {
+                "temporary_bucket":"my_bucket_name",
+                "gzip": true
             }
         }
     ]
