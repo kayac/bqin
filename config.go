@@ -35,8 +35,8 @@ func (c *Config) Validate() error {
 	if len(c.Rules) == 0 {
 		return errors.New("rules is not defined")
 	}
-	for i, other := range c.Rules {
-		dst := c.Rule.Clone()
+	for i, dst := range c.Rules {
+		other := c.Rule.Clone()
 		dst.MergeIn(other)
 		if err := dst.Validate(); err != nil {
 			return errors.Wrapf(err, "rule[%d]", i)
