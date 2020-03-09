@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/pem"
 	"fmt"
 	"strings"
@@ -18,21 +19,7 @@ import (
 )
 
 func TestGCPCredential(t *testing.T) {
-	yamlStr := fmt.Sprintf(`
-credential: |
-  {
-    "type": "service_account",
-    "project_id": "bqin-test-gcp",
-    "private_key_id": "0000000000000000000000000000000000000000",
-    "private_key": "%s",
-    "client_email": "bqin@bqin-test-gcp.iam.gserviceaccount.com",
-    "client_id": "000000000000000000000",
-    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-    "token_uri": "https://oauth2.googleapis.com/token",
-    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-    "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/bqin%%40bqin-test-gcp.iam.gserviceaccount.com"
-  }
-`, strings.Replace(generatePEM(), "\n", "\\n", -1))
+	yamlStr := fmt.Sprintf(`base64_credential: %s`, generateCredential())
 	gcp := &cloud.GCP{}
 	decoder := yaml.NewDecoder(strings.NewReader(yamlStr))
 	if err := decoder.Decode(gcp); err != nil {
@@ -49,6 +36,24 @@ credential: |
 	if trans, ok := client.Transport.(*oauth2.Transport); !ok {
 		t.Fatalf("unexpected client transport type: %#v", trans)
 	}
+}
+
+func generateCredential() string {
+	rawCred := fmt.Sprintf(`
+{
+  "type": "service_account",
+  "project_id": "bqin-test-gcp",
+  "private_key_id": "0000000000000000000000000000000000000000",
+  "private_key": "%s",
+  "client_email": "bqin@bqin-test-gcp.iam.gserviceaccount.com",
+  "client_id": "000000000000000000000",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/bqin%%40bqin-test-gcp.iam.gserviceaccount.com"
+}
+`, strings.Replace(generatePEM(), "\n", "\\n", -1))
+	return base64.StdEncoding.EncodeToString([]byte(rawCred))
 }
 
 func generatePEM() string {

@@ -84,9 +84,9 @@ BQin requires some credentials.
       access_key_id: {{ must_env "ACCESSS_KEY_ID" }}
       secret_access_key: {{ must_env "SECRET_ACCESS_KEY" }}
     gcp:
-      credential: |
-        {{ must_env "GCP_CREDENTIAL_JSON" }}
+      base64_credential: {{ must_env "GCP_CREDENTIAL_BASE64_JSON" }}
    ```
+   Note: For GCP credentials, specify a Base64-encoded string of the contents of the JSON file
 
 ## Run
 

@@ -2,7 +2,7 @@ queue_name: s3_to_bq
 
 cloud:
   gcp:
-    credential: |
+    base64_credential: |
       {{ must_env "GCP_CREDENTIAL" }}
 s3:
   bucket: bqin.bucket.test
