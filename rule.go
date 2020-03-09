@@ -37,10 +37,6 @@ type S3Soruce struct {
 	KeyRegexp string `yaml:"key_regexp"`
 }
 
-type ImportOption struct {
-	TemporaryBucket string `yaml:"temporary_bucket" json:"temporary_bucket"`
-}
-
 type S3Object struct {
 	Bucket string `json:"bucket"`
 	Object string `json:"object"`
@@ -66,11 +62,8 @@ func (r *Rule) Validate() error {
 	if r.BigQuery.Table == "" {
 		return errors.New("rule.bigquery.table is not defined")
 	}
-	if r.Option == nil {
-		return errors.New("rule.option is not defined")
-	}
-	if r.Option.TemporaryBucket == "" {
-		return errors.New("rule.option.temporary_bucket is not defined")
+	if err := r.Option.Validate(); err != nil {
+		return errors.Wrap(err, "rule.option")
 	}
 	return r.buildKeyMacher()
 }
@@ -240,20 +233,5 @@ func (bq *BigQueryDestination) MergeIn(other *BigQueryDestination) {
 	}
 	if bq.Table == "" {
 		bq.Table = other.Table
-	}
-}
-
-func (o *ImportOption) Clone() *ImportOption {
-	ret := &ImportOption{}
-	ret.MergeIn(o)
-	return ret
-}
-
-func (o *ImportOption) MergeIn(other *ImportOption) {
-	if other == nil {
-		return
-	}
-	if o.TemporaryBucket == "" {
-		o.TemporaryBucket = other.TemporaryBucket
 	}
 }
