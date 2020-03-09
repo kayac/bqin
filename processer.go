@@ -94,8 +94,8 @@ func (t *BigQueryTransporter) tmpObjectURL(record *ImportRequestRecord) string {
 func (t *BigQueryTransporter) load(ctx context.Context, record *ImportRequestRecord) error {
 	gcsRef := bigquery.NewGCSReference(t.tmpObjectURL(record))
 	gcsRef.AutoDetect = true
+	gcsRef.Compression = record.Option.getCompression()
 	gcsRef.MaxBadRecords = 100
-	gcsRef.AllowJaggedRows = true
 	logger.Debugf("prepre gcs reference: dump is %+v", gcsRef)
 
 	bq, err := t.cloud.GetBigQueryClient(ctx, record.Target.ProjectID)

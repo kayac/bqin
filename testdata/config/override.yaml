@@ -10,6 +10,7 @@ big_query:
 
 option:
   temporary_bucket: bqin-import-tmp
+  gzip: true
 
 rules:
   - big_query:
@@ -17,6 +18,8 @@ rules:
       table: user
     s3:
       key_prefix: data/user
+    option:
+      gzip: false
   - big_query:
       dataset: test2
       table: $1_$2
