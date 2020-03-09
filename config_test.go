@@ -38,6 +38,25 @@ func TestLoadConfig(t *testing.T) {
 					"s3://bqin.bucket.test/data/(.+)/snapshot_at=([0-9]{8})/.+ => bqin-test-gcp.test.$1_$2",
 				},
 			},
+			{
+				"testdata/config/override.yaml",
+				[]string{
+					"s3://bqin.bucket.test/data/user => bqin-test2-gcp.test.user",
+					"s3://bqin.bucket.test/data/(.+)/part-([0-9]+).csv => bqin-test-gcp.test2.$1_$2",
+				},
+			},
+			{
+				"testdata/config/standard.yaml",
+				[]string{
+					"s3://bqin.bucket.test/data/user => bqin-test-gcp.test.user",
+				},
+			},
+			{
+				"testdata/config/hive_format.yaml",
+				[]string{
+					"s3://bqin.bucket.test/data/(.+)/snapshot_at=([0-9]{8})/.+ => bqin-test-gcp.test.$1_$2",
+				},
+			},
 		}
 		for _, p := range patterns {
 			t.Run(p.path, func(t *testing.T) {
