@@ -1,0 +1,25 @@
+queue_name: s3_to_bq
+
+s3:
+  bucket: bqin.bucket.test
+  region: ap-northeast-1
+
+big_query:
+  project_id: bqin-test-gcp
+  dataset: test
+
+option:
+  temporary_bucket: bqin-import-tmp
+
+rules:
+  - big_query:
+      project_id: bqin-test2-gcp
+      table: user
+    s3:
+      key_prefix: data/user
+  - big_query:
+      dataset: test2
+      table: $1_$2
+    s3:
+      bucket: bqin.bucket.test
+      key_regexp: data/(.+)/part-([0-9]+).csv
