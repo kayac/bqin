@@ -65,7 +65,7 @@ func (app *App) ReceiveAndProcess() error {
 		default:
 		}
 		if err := app.OneReceiveAndProcess(ctx); err != nil && err != ErrNoRequest {
-			return err
+			logger.Errorf("OneReceiveAndProcess failed. reason:%s", err)
 		}
 	}
 }
