@@ -90,15 +90,19 @@ const (
 )
 
 type GCP struct {
-	WithoutAuthentication bool   `yaml:"without_authentication,omitempty"`
-	BigQueryEndpoint      string `yaml:"big_query_endpoint,omitempty"`
-	CloudStorageEndpoint  string `yaml:"cloud_storage_endpoint,omitempty"`
+	WithoutAuthentication bool         `yaml:"without_authentication,omitempty"`
+	BigQueryEndpoint      string       `yaml:"big_query_endpoint,omitempty"`
+	CloudStorageEndpoint  string       `yaml:"cloud_storage_endpoint,omitempty"`
+	Base64Credential      Base64String `yaml:"base64_credential"`
 }
 
 func (c *GCP) BuildOption(service string) []option.ClientOption {
 	opts := make([]option.ClientOption, 0, 2)
 	if c.WithoutAuthentication {
 		opts = append(opts, option.WithoutAuthentication())
+	}
+	if !c.Base64Credential.IsEmpty() {
+		opts = append(opts, option.WithCredentialsJSON(c.Base64Credential.Bytes()))
 	}
 	switch service {
 	case BigQueryServiceID:

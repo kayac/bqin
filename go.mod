@@ -16,6 +16,7 @@ require (
 	github.com/kylelemons/godebug v1.1.0
 	github.com/lestrrat-go/backoff v1.0.0
 	github.com/pkg/errors v0.9.1
+	golang.org/x/oauth2 v0.0.0-20190604053449-0f29369cfe45
 	google.golang.org/api v0.9.0
 	gopkg.in/yaml.v2 v2.2.2
 )

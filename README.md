@@ -79,6 +79,18 @@ BQin requires some credentials.
   Reference using GOOGLE_APPLICATION_CREDENTIALS.  
   https://cloud.google.com/docs/authentication/getting-started?hl=en  
 
+ - alternatively, It can be embedded in the config.
+  ```yaml
+  cloud:
+    aws:
+      region: ap-northeast-1
+      access_key_id: {{ must_env "ACCESSS_KEY_ID" }}
+      secret_access_key: {{ must_env "SECRET_ACCESS_KEY" }}
+    gcp:
+      base64_credential: {{ must_env "GCP_CREDENTIAL_BASE64_JSON" }}
+   ```
+   Note: For GCP credentials, specify a Base64-encoded string of the contents of the JSON file
+
 ## Run
 
 ### normally

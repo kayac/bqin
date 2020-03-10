@@ -11,6 +11,7 @@ var ExpectedDefault = []string{}
 
 func TestLoadConfig(t *testing.T) {
 	os.Setenv("AWS_REGION", "ap-northeast-1")
+	os.Setenv("GCP_CREDENTIAL", "HOGEHOGEHOGEHOGE")
 
 	type pattern struct {
 		path                 string
@@ -27,15 +28,10 @@ func TestLoadConfig(t *testing.T) {
 				},
 			},
 			{
-				"testdata/config/standard.yaml",
+				"testdata/config/with_gcp_credntial.yaml",
 				[]string{
 					"s3://bqin.bucket.test/data/user => bqin-test-gcp.test.user",
-				},
-			},
-			{
-				"testdata/config/hive_format.yaml",
-				[]string{
-					"s3://bqin.bucket.test/data/(.+)/snapshot_at=([0-9]{8})/.+ => bqin-test-gcp.test.$1_$2",
+					"s3://bqin.bucket.test/data/(.+)/part-([0-9]+).csv => bqin-test-gcp.test.$1_$2",
 				},
 			},
 			{
@@ -76,6 +72,7 @@ func TestLoadConfig(t *testing.T) {
 		}
 	})
 
+	os.Unsetenv("GCP_CREDENTIAL")
 	t.Run("fail", func(t *testing.T) {
 		patterns := []pattern{
 			{path: "testdata/config/not_found.yaml"},
@@ -83,14 +80,29 @@ func TestLoadConfig(t *testing.T) {
 			{path: "testdata/config/broken_no_queue_name.yaml"},
 			{path: "testdata/config/broken_no_key_matcher.yaml"},
 			{path: "testdata/config/broken_no_tempbucket_option.yaml"},
+			{path: "testdata/config/with_gcp_credntial.yaml"},
 		}
 		for _, p := range patterns {
 			t.Run(p.path, func(t *testing.T) {
-				_, err := bqin.LoadConfig(p.path)
-				if err == nil {
+				// return error or panic
+				result := errorOrPanic(func() error {
+					_, err := bqin.LoadConfig(p.path)
+					return err
+				})
+				if !result {
 					t.Errorf("LoadConfig(%s) must be failed", p.path)
 				}
 			})
 		}
 	})
+}
+
+func errorOrPanic(target func() error) (result bool) {
+	defer func() {
+		if err := recover(); err != nil {
+			result = true
+		}
+	}()
+	result = target() != nil
+	return
 }
