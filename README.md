@@ -40,6 +40,8 @@ big_query:
 option:
   temporary_bucket: my_bucket_name # GCP temporary bucket
   gzip: true
+  source_format: json # [csv, json, parquet] select able
+  auto_detect: true # works only csv or json
 
 # define load rule
 rules:
@@ -51,7 +53,7 @@ rules:
   - big_query:  # expand by key_regexp captured value. for date-sharded tables.
       table: $1_$2
     s3:
-      key_regexp: data/(.+)/part-([0-9]+).csv
+      key_regexp: data/(.+)/part-([0-9]+).gz
 
   - big_query: # override default section in this rule
       project_id: hoge
@@ -59,9 +61,10 @@ rules:
       table: role
     s3:
       bucket: bqin.bucket.test
-      key_prefix: data/role
+      key_regexp: data/(.+)/part-([0-9]+).csv
     option:
       gzip: false
+      source_format: csv
 ```
 
 A configuration file is parsed by [kayac/go-config](https://github.com/kayac/go-config).
