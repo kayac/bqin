@@ -133,6 +133,8 @@ func expandPlaceHolder(s string, capture []string) string {
 }
 
 func (r *Rule) buildImportRequestRecord(bucket, key string, capture []string) *ImportRequestRecord {
+	option := r.Option.Clone()
+	option.TemporaryBucket = expandPlaceHolder(option.TemporaryBucket, capture)
 	return &ImportRequestRecord{
 		Source: &S3Object{
 			Bucket: bucket,
@@ -143,9 +145,7 @@ func (r *Rule) buildImportRequestRecord(bucket, key string, capture []string) *I
 			Dataset:   expandPlaceHolder(r.BigQuery.Dataset, capture),
 			Table:     expandPlaceHolder(r.BigQuery.Table, capture),
 		},
-		Option: &ImportOption{
-			TemporaryBucket: expandPlaceHolder(r.Option.TemporaryBucket, capture),
-		},
+		Option: option,
 	}
 }
 

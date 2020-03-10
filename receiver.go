@@ -66,6 +66,10 @@ func (r *SQSReceiver) Receive(ctx context.Context) (*ImportRequest, error) {
 		return nil, err
 	}
 	req.Records = r.convert(event)
+	if len(req.Records) == 0 {
+		logger.Errorf("[%s]  No match rules", req.ID)
+		return nil, errors.New("no match rules")
+	}
 	isFailed = false
 	return req, nil
 }

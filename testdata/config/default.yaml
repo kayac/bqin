@@ -10,6 +10,7 @@ big_query:
 
 option:
   temporary_bucket: bqin-import-tmp
+  source_format: csv
 
 rules:
   - big_query:

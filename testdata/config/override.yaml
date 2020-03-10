@@ -11,6 +11,8 @@ big_query:
 option:
   temporary_bucket: bqin-import-tmp
   gzip: true
+  auto_detect: true
+  source_format: parquet
 
 rules:
   - big_query:
@@ -20,9 +22,12 @@ rules:
       key_prefix: data/user
     option:
       gzip: false
+      auto_detect: false
   - big_query:
       dataset: test2
       table: $1_$2
     s3:
       bucket: bqin.bucket.test
       key_regexp: data/(.+)/part-([0-9]+).csv
+    option:
+      source_format: csv

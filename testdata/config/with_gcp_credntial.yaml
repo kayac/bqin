@@ -14,7 +14,7 @@ big_query:
 
 option:
   temporary_bucket: bqin-import-tmp
-
+  source_format: json
 rules:
   - big_query:
       table: user
