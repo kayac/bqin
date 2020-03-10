@@ -77,6 +77,8 @@ func TestLoadConfig(t *testing.T) {
 		patterns := []pattern{
 			{path: "testdata/config/not_found.yaml"},
 			{path: "testdata/config/broken_invalid_key_regexp.yaml"},
+			{path: "testdata/config/broken_invalid_source_format.yaml"},
+			{path: "testdata/config/broken_no_source_format.yaml"},
 			{path: "testdata/config/broken_no_queue_name.yaml"},
 			{path: "testdata/config/broken_no_key_matcher.yaml"},
 			{path: "testdata/config/broken_no_tempbucket_option.yaml"},

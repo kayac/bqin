@@ -9,6 +9,10 @@ big_query:
   project_id: bqin-test-gcp
   dataset: test
 
+option:
+  temporary_bucket: bqin-temporary
+  source_format: csv
+
 rules:
   - big_query:
       table: $1_$2

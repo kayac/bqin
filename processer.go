@@ -93,7 +93,8 @@ func (t *BigQueryTransporter) tmpObjectURL(record *ImportRequestRecord) string {
 
 func (t *BigQueryTransporter) load(ctx context.Context, record *ImportRequestRecord) error {
 	gcsRef := bigquery.NewGCSReference(t.tmpObjectURL(record))
-	gcsRef.AutoDetect = true
+	gcsRef.AutoDetect = record.Option.getAutoDetect()
+	gcsRef.SourceFormat = record.Option.getSourceFormat()
 	gcsRef.Compression = record.Option.getCompression()
 	gcsRef.MaxBadRecords = 100
 	logger.Debugf("prepre gcs reference: dump is %+v", gcsRef)

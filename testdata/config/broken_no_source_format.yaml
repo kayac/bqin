@@ -9,11 +9,10 @@ big_query:
   dataset: test
 
 option:
-  temporary_bucket: bqin-import-tmp
   source_format: csv
 
 rules:
   - big_query:
-      table: user
+      table: hoge
     s3:
-      key_prefix: data/user
+      key_prefix: data/
