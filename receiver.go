@@ -3,7 +3,6 @@ package bqin
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"net/url"
 	"strings"
 	"sync"
@@ -11,67 +10,134 @@ import (
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sqs"
-	"github.com/kayac/bqin/cloud"
 	"github.com/kayac/bqin/internal/logger"
 	"github.com/lestrrat-go/backoff"
+	"github.com/pkg/errors"
 )
 
-var (
-	ErrMaxRetry = errors.New("max retry count reached")
-)
-
-type SQSReceiver struct {
-	cloud *cloud.Cloud
+type Receiver struct {
+	//for sqs client session
+	sess *session.Session
 
 	mu        sync.Mutex
-	isChecked bool
-	rules     []*Rule
-	queueURL  string
 	queueName string
+	queueURL  string
 }
 
-func NewSQSReceiver(conf *Config, c *cloud.Cloud) *SQSReceiver {
-	return &SQSReceiver{
-		cloud:     c,
-		rules:     conf.Rules,
-		queueName: conf.QueueName,
+func NewReceiver(queueName string, sess *session.Session) *Receiver {
+	return &Receiver{
+		sess:      sess,
+		queueName: queueName,
 	}
 }
 
-func (r *SQSReceiver) Receive(ctx context.Context) (*ImportRequest, error) {
-	if err := r.check(ctx); err != nil {
-		logger.Errorf("Can't pass check. %s", err)
-		return nil, err
-	}
-	msg, err := r.receive(ctx)
+type ReceiptHandle struct {
+	svc              *sqs.SQS
+	queueURL         string
+	isCompelete      bool
+	msgId            string
+	msgReceiptHandle string
+}
+
+func (r *Receiver) Receive(ctx context.Context) ([]*url.URL, *ReceiptHandle, error) {
+	qurl, err := r.getQueueURL()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+	svc := sqs.New(r.sess)
+	res, err := svc.ReceiveMessageWithContext(ctx, &sqs.ReceiveMessageInput{
+		MaxNumberOfMessages: aws.Int64(1),
+		QueueUrl:            aws.String(qurl),
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(res.Messages) == 0 {
+		return nil, nil, ErrNoMessage
+	}
+	msg := res.Messages[0]
+	handle := newReceiptHandle(svc, qurl, msg)
+	handle.Debugf("body: %s", *msg.Body)
+
+	if msg.Body == nil {
+		return nil, handle, errors.New("body is nil")
+	}
+	dec := json.NewDecoder(strings.NewReader(*msg.Body))
+	var event events.S3Event
+	if err := dec.Decode(&event); err != nil {
+		return nil, handle, errors.Wrap(err, "body parse failed")
 	}
 
-	var isFailed bool = true
-	req := &ImportRequest{
-		ID:            *msg.MessageId,
-		ReceiptHandle: *msg.ReceiptHandle,
-	}
-	defer func() {
-		if isFailed {
-			logger.Infof("[%s] Aborted message. ReceiptHandle = %s", req.ID, req.ReceiptHandle)
+	urls := make([]*url.URL, 0, len(event.Records))
+	for _, record := range event.Records {
+		record.S3.Object.URLDecodedKey = record.S3.Object.Key
+		if strings.Contains(record.S3.Object.Key, "%") {
+			if decordedKey, err := url.QueryUnescape(record.S3.Object.Key); err == nil {
+				record.S3.Object.URLDecodedKey = decordedKey
+			}
 		}
-	}()
+		u := &url.URL{
+			Scheme: "s3",
+			Host:   record.S3.Bucket.Name,
+			Path:   record.S3.Object.URLDecodedKey,
+		}
+		handle.Debugf("message include %s", u.String())
+		urls = append(urls, u)
+	}
+	return urls, handle, nil
+}
 
-	event, err := r.parse(msg)
+func (r *Receiver) getQueueURL() (string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.queueURL != "" {
+		return r.queueURL, nil
+	}
+
+	ctx := context.Background()
+	logger.Infof("Check sqs name:%s", r.queueName)
+	res, err := sqs.New(r.sess).GetQueueUrlWithContext(ctx, &sqs.GetQueueUrlInput{
+		QueueName: aws.String(r.queueName),
+	})
 	if err != nil {
-		logger.Errorf("[%s]  Can't parse event from Body. %s", req.ID, err)
-		return nil, err
+		return "", errors.Wrap(err, "cannot get sqs queue url")
 	}
-	req.Records = r.convert(event)
-	if len(req.Records) == 0 {
-		logger.Errorf("[%s]  No match rules", req.ID)
-		return nil, errors.New("no match rules")
+	r.queueURL = *res.QueueUrl
+	logger.Debugf("QueueURL is %s", r.queueURL)
+	return r.queueURL, nil
+}
+
+func newReceiptHandle(svc *sqs.SQS, queueURL string, msg *sqs.Message) *ReceiptHandle {
+	handle := &ReceiptHandle{
+		svc:              svc,
+		isCompelete:      false,
+		msgId:            *msg.MessageId,
+		msgReceiptHandle: *msg.ReceiptHandle,
 	}
-	isFailed = false
-	return req, nil
+	handle.Infof("Recieved message.")
+	handle.Debugf("receipt handle: %s", handle.msgReceiptHandle)
+	return handle
+}
+
+func (h *ReceiptHandle) Infof(format string, args ...interface{}) {
+	args = append([]interface{}{h.msgId}, args...)
+	logger.Infof("[%s]"+format, args...)
+}
+
+func (h *ReceiptHandle) Debugf(format string, args ...interface{}) {
+	args = append([]interface{}{h.msgId}, args...)
+	logger.Debugf("[%s]"+format, args...)
+}
+
+func (h *ReceiptHandle) Errorf(format string, args ...interface{}) {
+	args = append([]interface{}{h.msgId}, args...)
+	logger.Errorf("[%s]"+format, args...)
+}
+
+func (h *ReceiptHandle) Complete() {
+	h.isCompelete = true
 }
 
 var policy = backoff.NewExponential(
@@ -80,116 +146,42 @@ var policy = backoff.NewExponential(
 	backoff.WithMaxRetries(5),                  // If not specified, default number of retries is 10
 )
 
-func (r *SQSReceiver) Complete(_ context.Context, req *ImportRequest) error {
-	var completed = false
-	defer func() {
-		if !completed {
-			logger.Infof("[%s] Can't complete message. ReceiptHandle: %s", req.ID, req.ReceiptHandle)
-		}
-	}()
-
-	_, err := r.cloud.GetSQS().DeleteMessage(&sqs.DeleteMessageInput{
-		QueueUrl:      aws.String(r.queueURL),
-		ReceiptHandle: aws.String(req.ReceiptHandle),
-	})
-	if err != nil {
-		logger.Infof("[%s] Can't delete message : %s", req.ID, err)
-		b, cancel := policy.Start(context.Background())
-		defer cancel()
-
-		for backoff.Continue(b) {
-			_, err = r.cloud.GetSQS().DeleteMessage(&sqs.DeleteMessageInput{
-				QueueUrl:      aws.String(r.queueURL),
-				ReceiptHandle: aws.String(req.ReceiptHandle),
-			})
-			if err == nil {
-				completed = true
-				logger.Infof("[%s] Retry completed message.", req.ID)
-				return nil
-			}
-		}
-		logger.Errorf("[%s] Max retry count reached. Giving up. last error: %s", req.ID, err)
-		return ErrMaxRetry
-	}
-	completed = true
-	logger.Infof("[%s] Completed message.", req.ID)
-	return nil
-}
-
-func (r *SQSReceiver) check(ctx context.Context) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if r.isChecked {
+func (h *ReceiptHandle) Cleanup() error {
+	if h == nil {
 		return nil
 	}
 
-	//first check only
-	logger.Infof("Connect to SQS: %s", r.queueName)
-	res, err := r.cloud.GetSQS().GetQueueUrlWithContext(ctx, &sqs.GetQueueUrlInput{
-		QueueName: aws.String(r.queueName),
-	})
-	if err != nil {
-		return err
-	}
-	r.isChecked = true
-	r.queueURL = *res.QueueUrl
-	logger.Debugf("QueueURL is %s", r.queueURL)
-	return nil
-}
-
-func (r *SQSReceiver) receive(ctx context.Context) (*sqs.Message, error) {
-	res, err := r.cloud.GetSQS().ReceiveMessageWithContext(ctx, &sqs.ReceiveMessageInput{
-		MaxNumberOfMessages: aws.Int64(1),
-		QueueUrl:            aws.String(r.queueURL),
-	})
-	if err != nil {
-		return nil, err
-	}
-	if len(res.Messages) == 0 {
-		return nil, ErrNoRequest
-	}
-	msg := res.Messages[0]
-	msgId := *msg.MessageId
-	logger.Infof("[%s] Recieved message.", msgId)
-	logger.Debugf("[%s] receipt handle: %s", msgId, *msg.ReceiptHandle)
-	logger.Debugf("[%s] body: %s", msgId, *msg.Body)
-	return msg, nil
-}
-
-//parse sqs messge body as s3 event
-func (r *SQSReceiver) parse(msg *sqs.Message) (*events.S3Event, error) {
-
-	if msg.Body == nil {
-		return nil, errors.New("body is nil")
-	}
-
-	dec := json.NewDecoder(strings.NewReader(*msg.Body))
-	var event events.S3Event
-	err := dec.Decode(&event)
-	for i, _ := range event.Records {
-		event.Records[i].S3.Object.URLDecodedKey = event.Records[i].S3.Object.Key
-		if !strings.Contains(event.Records[i].S3.Object.Key, "%") {
-			continue
+	var cleanuped = false
+	defer func() {
+		if !cleanuped {
+			h.Errorf("Can't cleanup message. ReceiptHandle: %s", h.msgReceiptHandle)
 		}
-		if _key, err := url.QueryUnescape(event.Records[i].S3.Object.Key); err == nil {
-			event.Records[i].S3.Object.URLDecodedKey = _key
-		}
+	}()
+
+	input := &sqs.DeleteMessageInput{
+		QueueUrl:      aws.String(h.queueURL),
+		ReceiptHandle: aws.String(h.msgReceiptHandle),
+	}
+	_, err := h.svc.DeleteMessage(input)
+	if err == nil {
+		cleanuped = true
+		h.Infof("Completed message.")
+		return nil
 	}
 
-	return &event, err
-}
+	h.Infof("Can't delete message (retry count = 0): %s", err)
+	b, cancel := policy.Start(context.Background())
+	defer cancel()
 
-func (r *SQSReceiver) convert(event *events.S3Event) []*ImportRequestRecord {
-	ret := make([]*ImportRequestRecord, 0, len(event.Records))
-	for _, record := range event.Records {
-		for _, rule := range r.rules {
-			ok, reqRecord := rule.MatchEventRecord(record)
-			if !ok {
-				continue
-			}
-			logger.Debugf("match rule: %s", rule.String())
-			ret = append(ret, reqRecord)
+	for i := 1; backoff.Continue(b); i++ {
+		_, err = h.svc.DeleteMessage(input)
+		if err == nil {
+			cleanuped = true
+			h.Infof("Retry completed message.")
+			return nil
 		}
+		h.Infof("Can't delete message (retry count = %d): %s", i, err)
 	}
-	return ret
+	h.Errorf("Max retry count reached. Giving up. last error: %s", err)
+	return ErrMaxRetry
 }

@@ -131,7 +131,7 @@ func (c *E2ECase) Run(t *testing.T) {
 		}
 	}
 	err = app.OneReceiveAndProcess(ctx)
-	if err != bqin.ErrNoRequest {
+	if err != bqin.ErrNoMessage {
 		t.Errorf("when no more massage: %s", err)
 	}
 	loaded := c.stubMgr.BigQuery.LoadedData()

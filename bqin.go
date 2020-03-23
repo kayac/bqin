@@ -11,41 +11,30 @@ import (
 	"github.com/kayac/bqin/internal/logger"
 )
 
-var (
-	ErrNoRequest = errors.New("no import request")
-)
-
-type ImportRequest struct {
-	ID            string                 `json:"id,omitempty"`
-	ReceiptHandle string                 `json:"receipt_handle,omitempty"`
-	Records       []*ImportRequestRecord `json:"records"`
-}
-
-type Receiver interface {
-	Receive(context.Context) (*ImportRequest, error)
-	Complete(context.Context, *ImportRequest) error
-}
-
-type Processor interface {
-	Process(context.Context, *ImportRequest) error
-}
-
 type App struct {
-	Receiver
-	Processor
+	*Receiver
+	*Resolver
+	*Transporter
+	*Loader
 
-	mu sync.Mutex
-
+	mu         sync.Mutex
 	inShutdown atomicBool
 	isAlive    atomicBool
 	doneChan   chan struct{}
 }
 
 func NewApp(conf *Config) (*App, error) {
-	c := cloud.New(conf.Cloud)
+	sess := conf.Cloud.AWS.BuildSession()
 	return &App{
-		Receiver:  NewSQSReceiver(conf, c),
-		Processor: NewBigQueryTransporter(conf, c),
+		Receiver: NewReceiver(conf.QueueName, sess),
+		Resolver: NewResolver(conf.Rules),
+		Transporter: NewTransporter(
+			sess,
+			conf.Cloud.GCP.BuildOption(cloud.CloudStorageServiceID)...,
+		),
+		Loader: NewLoader(
+			conf.Cloud.GCP.BuildOption(cloud.BigQueryServiceID)...,
+		),
 	}, nil
 }
 
@@ -64,32 +53,41 @@ func (app *App) ReceiveAndProcess() error {
 			return nil
 		default:
 		}
-		if err := app.OneReceiveAndProcess(ctx); err != nil && err != ErrNoRequest {
+		if err := app.OneReceiveAndProcess(ctx); err != nil && err != ErrNoMessage {
 			logger.Errorf("OneReceiveAndProcess failed. reason:%s", err)
 		}
 	}
 }
 
 func (app *App) OneReceiveAndProcess(ctx context.Context) error {
-	if app.Receiver == nil {
-		return errors.New("Receiver is nil")
-	}
-
-	if app.Processor == nil {
-		return errors.New("Processor is nil")
-	}
-	req, err := app.Receive(ctx)
+	urls, receiptHandle, err := app.Receive(ctx)
+	defer receiptHandle.Cleanup()
 	if err != nil {
 		return err
 	}
-	logger.InfoDump(req)
-	if err := app.Process(ctx, req); err != nil {
-		return err
+	jobs := app.Resolve(urls)
+	if len(jobs) == 0 {
+		return errors.New("nothing to do")
 	}
 
-	if err := app.Complete(ctx, req); err != nil {
-		return err
+	transportHandles := make([]*TransportJobHandle, 0, len(jobs))
+	defer func() {
+		for _, h := range transportHandles {
+			h.Cleanup(ctx)
+		}
+	}()
+
+	for _, job := range jobs {
+		transportHandle, err := app.Transport(ctx, job.TransportJob)
+		if err != nil {
+			return err
+		}
+		transportHandles = append(transportHandles, transportHandle)
+		if err := app.Load(ctx, job.LoadingJob); err != nil {
+			return err
+		}
 	}
+	receiptHandle.Complete()
 	return nil
 }
 

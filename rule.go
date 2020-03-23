@@ -2,11 +2,11 @@ package bqin
 
 import (
 	"fmt"
+	"net/url"
 	"regexp"
-	"strconv"
 	"strings"
 
-	"github.com/aws/aws-lambda-go/events"
+	"cloud.google.com/go/bigquery"
 	"github.com/kayac/bqin/internal/logger"
 	"github.com/pkg/errors"
 )
@@ -17,17 +17,17 @@ const (
 )
 
 type Rule struct {
-	S3       *S3Soruce            `yaml:"s3"`
-	BigQuery *BigQueryDestination `yaml:"big_query"`
-	Option   *ImportOption        `yaml:"option"`
+	S3       *S3Soruce           `yaml:"s3"`
+	BigQuery *LoadingDestination `yaml:"big_query"`
+	Option   *JobOption          `yaml:"option"`
 
 	keyMatcher func(string) (bool, []string)
 }
 
-type BigQueryDestination struct {
+type LoadingDestination struct {
 	ProjectID string `yaml:"project_id" json:"project_id"`
-	Table     string `yaml:"table" json:"table"`
 	Dataset   string `yaml:"dataset" json:"dataset"`
+	Table     string `yaml:"table" json:"table"`
 }
 
 type S3Soruce struct {
@@ -44,12 +44,6 @@ type S3Object struct {
 
 func (s S3Object) String() string {
 	return fmt.Sprintf(S3URITemplate, s.Bucket, s.Object)
-}
-
-type ImportRequestRecord struct {
-	Source *S3Object            `json:"source"`
-	Target *BigQueryDestination `json:"target"`
-	Option *ImportOption        `json:"option"`
 }
 
 func (r *Rule) Validate() error {
@@ -104,49 +98,15 @@ func (r *Rule) match(bucket, key string) (bool, []string) {
 	return r.keyMatcher(key)
 }
 
-func (r *Rule) Match(bucket, key string) (bool, *ImportRequestRecord) {
-	ok, capture := r.match(bucket, key)
-	if !ok {
+func (r *Rule) Match(u *url.URL) (bool, []string) {
+	if u.Scheme != "s3" {
 		return false, nil
 	}
-	return true, r.buildImportRequestRecord(bucket, key, capture)
-}
-
-//MatchEventRecord must after Valicate
-func (r *Rule) MatchEventRecord(record events.S3EventRecord) (bool, *ImportRequestRecord) {
-	if record.S3.Object.URLDecodedKey != "" {
-		return r.Match(record.S3.Bucket.Name, record.S3.Object.URLDecodedKey)
-	}
-	return r.Match(record.S3.Bucket.Name, record.S3.Object.Key)
+	return r.match(u.Host, u.Path)
 }
 
 func (r *Rule) String() string {
 	return strings.Join([]string{r.S3.String(), r.BigQuery.String()}, " => ")
-}
-
-// example: when capture []string{"hoge"},  table_$1 => table_hoge
-func expandPlaceHolder(s string, capture []string) string {
-	for i, v := range capture {
-		s = strings.Replace(s, "$"+strconv.Itoa(i), v, -1)
-	}
-	return s
-}
-
-func (r *Rule) buildImportRequestRecord(bucket, key string, capture []string) *ImportRequestRecord {
-	option := r.Option.Clone()
-	option.TemporaryBucket = expandPlaceHolder(option.TemporaryBucket, capture)
-	return &ImportRequestRecord{
-		Source: &S3Object{
-			Bucket: bucket,
-			Object: key,
-		},
-		Target: &BigQueryDestination{
-			ProjectID: expandPlaceHolder(r.BigQuery.ProjectID, capture),
-			Dataset:   expandPlaceHolder(r.BigQuery.Dataset, capture),
-			Table:     expandPlaceHolder(r.BigQuery.Table, capture),
-		},
-		Option: option,
-	}
 }
 
 func (r *Rule) Clone() *Rule {
@@ -211,17 +171,17 @@ func (s3 *S3Soruce) MergeIn(other *S3Soruce) {
 	}
 }
 
-func (bq BigQueryDestination) String() string {
+func (bq LoadingDestination) String() string {
 	return fmt.Sprintf(BigQueryTableTemplate, bq.ProjectID, bq.Dataset, bq.Table)
 }
 
-func (bq *BigQueryDestination) Clone() *BigQueryDestination {
-	ret := &BigQueryDestination{}
+func (bq *LoadingDestination) Clone() *LoadingDestination {
+	ret := &LoadingDestination{}
 	ret.MergeIn(bq)
 	return ret
 }
 
-func (bq *BigQueryDestination) MergeIn(other *BigQueryDestination) {
+func (bq *LoadingDestination) MergeIn(other *LoadingDestination) {
 	if other == nil {
 		return
 	}
@@ -234,4 +194,73 @@ func (bq *BigQueryDestination) MergeIn(other *BigQueryDestination) {
 	if bq.Table == "" {
 		bq.Table = other.Table
 	}
+}
+
+type JobOption struct {
+	TemporaryBucket string       `yaml:"temporary_bucket" json:"temporary_bucket"`
+	GZip            *bool        `yaml:"gzip,omitempty" json:"gzip,omitempty"`
+	AutoDetect      *bool        `yaml:"auto_detect,omitempty" json:"auto_detect,omitempty"`
+	SourceFormat    SourceFormat `yaml:"source_format" json:"source_format"`
+}
+
+func (o *JobOption) Validate() error {
+	if o == nil {
+		return errors.New("not defined")
+	}
+	if o.TemporaryBucket == "" {
+		return errors.New("temporary_bucket is not defined")
+	}
+	if !o.SourceFormat.IsSupport() {
+		return errors.New("source_format is not supported")
+	}
+	if o.getAutoDetect() && !o.SourceFormat.Is(CSV, JSON) {
+		logger.Infof("auto_detect works only when source_format is csv or json")
+	}
+	return nil
+}
+
+func (o *JobOption) Clone() *JobOption {
+	ret := &JobOption{}
+	ret.MergeIn(o)
+	return ret
+}
+
+func (o *JobOption) MergeIn(other *JobOption) {
+	if other == nil {
+		return
+	}
+	if o.TemporaryBucket == "" {
+		o.TemporaryBucket = other.TemporaryBucket
+	}
+	if o.GZip == nil {
+		o.GZip = other.GZip
+	}
+	if o.AutoDetect == nil {
+		o.AutoDetect = other.AutoDetect
+	}
+	if o.SourceFormat == Unknown || !o.SourceFormat.IsSupport() {
+		o.SourceFormat = other.SourceFormat
+	}
+
+}
+
+func (o *JobOption) getCompression() bigquery.Compression {
+	if o.GZip == nil {
+		return bigquery.None
+	}
+	if *o.GZip {
+		return bigquery.Gzip
+	}
+	return bigquery.None
+}
+
+func (o *JobOption) getAutoDetect() bool {
+	if o.AutoDetect == nil {
+		return false
+	}
+	return *o.AutoDetect
+}
+
+func (o *JobOption) getSourceFormat() bigquery.DataFormat {
+	return o.SourceFormat.toBigQuery()
 }

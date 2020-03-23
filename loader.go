@@ -19,12 +19,6 @@ func NewLoader(opts ...option.ClientOption) *Loader {
 	}
 }
 
-type LoadingDestination struct {
-	ProjectID string
-	Dataset   string
-	Table     string
-}
-
 type LoadingJob struct {
 	GCSRef *bigquery.GCSReference
 	*LoadingDestination
