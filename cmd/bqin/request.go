@@ -47,23 +47,6 @@ func (r *requestCmd) Execute(ctx context.Context, f *flag.FlagSet, _ ...interfac
 	}
 	app := bqin.NewApp(conf)
 
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	go func() {
-		trapSignals := []os.Signal{
-			syscall.SIGHUP,
-			syscall.SIGINT,
-			syscall.SIGTERM,
-			syscall.SIGQUIT,
-		}
-		sigint := make(chan os.Signal, 1)
-		signal.Notify(sigint, trapSignals...)
-		<-sigint
-
-		logger.Infof("cancel accept")
-		cancel()
-	}()
-
 	for _, arg := range f.Args() {
 		select {
 		case <-ctx.Done():

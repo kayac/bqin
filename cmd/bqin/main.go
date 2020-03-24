@@ -11,10 +11,17 @@ import (
 func main() {
 	subcommands.Register(subcommands.HelpCommand(), "")
 	subcommands.Register(&versionCmd{}, "")
-	subcommands.Register(&cmdWrap{Command: &runCmd{}}, "")
-	subcommands.Register(&cmdWrap{Command: &requestCmd{}}, "")
+	subcommands.Register(&cmdWrap{
+		Command: &signalTrapper{
+			Command: &runCmd{},
+		},
+	}, "")
+	subcommands.Register(&cmdWrap{
+		Command: &signalTrapper{
+			Command: &requestCmd{},
+		},
+	}, "")
 	flag.Parse()
 
-	ctx := context.Background()
-	os.Exit(int(subcommands.Execute(ctx)))
+	os.Exit(int(subcommands.Execute(context.Background())))
 }

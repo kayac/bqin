@@ -3,10 +3,6 @@ package main
 import (
 	"context"
 	"flag"
-	"os"
-	"os/signal"
-	"syscall"
-	"time"
 
 	"github.com/google/subcommands"
 	"github.com/kayac/bqin"
@@ -39,23 +35,7 @@ func (r *runCmd) Execute(ctx context.Context, _ *flag.FlagSet, _ ...interface{})
 		logger.Errorf("load config failed: %s", err)
 		return subcommands.ExitFailure
 	}
-	app := bqin.NewApp(conf)
-	ctx, cancel := context.WithCancel(context.Background())
-	go func() {
-		trapSignals := []os.Signal{
-			syscall.SIGHUP,
-			syscall.SIGINT,
-			syscall.SIGTERM,
-			syscall.SIGQUIT,
-		}
-		sigint := make(chan os.Signal, 1)
-		signal.Notify(sigint, trapSignals...)
-		<-sigint
-		logger.Infof("sutdown...")
-		cancel()
-	}()
-
-	if err := app.Run(ctx); err != nil {
+	if err := bqin.NewApp(conf).Run(ctx); err != nil {
 		logger.Errorf("run error: %v", err)
 		return subcommands.ExitFailure
 	}

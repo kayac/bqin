@@ -4,6 +4,9 @@ import (
 	"context"
 	"flag"
 	"os"
+	"os/signal"
+	"sync"
+	"syscall"
 
 	"github.com/google/subcommands"
 	"github.com/kayac/bqin/internal/logger"
@@ -34,5 +37,35 @@ func (w *cmdWrap) Execute(ctx context.Context, f *flag.FlagSet, args ...interfac
 	}
 	logger.Setup(os.Stderr, minLevel)
 	logger.Infof("bqin version: %s", version)
+
+	return w.Command.Execute(ctx, f, args...)
+}
+
+type signalTrapper struct {
+	subcommands.Command
+}
+
+func (w *signalTrapper) Execute(ctx context.Context, f *flag.FlagSet, args ...interface{}) subcommands.ExitStatus {
+
+	trapSignals := []os.Signal{
+		syscall.SIGHUP,
+		syscall.SIGINT,
+		syscall.SIGTERM,
+		syscall.SIGQUIT,
+	}
+	sigint := make(chan os.Signal, 1)
+	signal.Notify(sigint, trapSignals...)
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		sig := <-sigint
+		logger.Infof("Got signal: %s(%d)", sig, sig)
+		logger.Infof("sutdown...")
+		cancel()
+	}()
 	return w.Command.Execute(ctx, f, args...)
 }
