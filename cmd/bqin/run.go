@@ -40,7 +40,7 @@ func (r *runCmd) Execute(ctx context.Context, _ *flag.FlagSet, _ ...interface{})
 		return subcommands.ExitFailure
 	}
 	app := bqin.NewApp(conf)
-	idleClosed := make(chan struct{})
+	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
 		trapSignals := []os.Signal{
 			syscall.SIGHUP,
@@ -51,27 +51,14 @@ func (r *runCmd) Execute(ctx context.Context, _ *flag.FlagSet, _ ...interface{})
 		sigint := make(chan os.Signal, 1)
 		signal.Notify(sigint, trapSignals...)
 		<-sigint
-
-		logger.Infof("start sutdown...")
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		if err := app.Shutdown(ctx); err != nil {
-			logger.Errorf("shutdown failed: %v", err)
-		} else {
-			logger.Infof("finish shutdown.")
-		}
-		close(idleClosed)
+		logger.Infof("sutdown...")
+		cancel()
 	}()
 
-	if err := app.ReceiveAndProcess(); err != nil {
-		if err == context.Canceled {
-			logger.Infof("canceled")
-			return subcommands.ExitSuccess
-		}
+	if err := app.Run(ctx); err != nil {
 		logger.Errorf("run error: %v", err)
 		return subcommands.ExitFailure
 	}
-	<-idleClosed
 	logger.Infof("goodbye.")
 	return subcommands.ExitSuccess
 }

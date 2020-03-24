@@ -3,9 +3,6 @@ package bqin
 import (
 	"context"
 	"errors"
-	"sync"
-	"sync/atomic"
-	"time"
 
 	"github.com/kayac/bqin/internal/logger"
 )
@@ -15,11 +12,6 @@ type App struct {
 	*Resolver
 	*Transporter
 	*Loader
-
-	mu         sync.Mutex
-	inShutdown atomicBool
-	isAlive    atomicBool
-	doneChan   chan struct{}
 }
 
 func NewApp(conf *Config) *App {
@@ -27,28 +19,43 @@ func NewApp(conf *Config) *App {
 	return factory.NewApp()
 }
 
-func (app *App) ReceiveAndProcess() error {
+func (app *App) Run(ctx context.Context, opts ...RunOption) error {
 	logger.Infof("Starting up bqin worker")
 	defer logger.Infof("Shutdown bqin worker")
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	app.isAlive.set()
-	defer app.isAlive.unset()
+	settings := &RunSettings{}
+	for _, opt := range opts {
+		opt.Apply(settings)
+	}
 
 	for {
 		select {
-		case <-app.getDoneChan():
+		case <-ctx.Done():
+			if err := ctx.Err(); err != context.Canceled {
+				return err
+			}
+			logger.Infof("canceled")
 			return nil
 		default:
 		}
-		if err := app.OneReceiveAndProcess(ctx); err != nil && err != ErrNoMessage {
-			logger.Errorf("OneReceiveAndProcess failed. reason:%s", err)
+
+		switch err := app.Batch(ctx); err {
+		case ErrNoMessage:
+			if settings.ExitNoMessage {
+				logger.Infof("success all")
+				return nil
+			}
+		case nil:
+			//nothing todo
+		default:
+			if settings.ExitError {
+				return err
+			}
+			logger.Errorf("process failed. reason:%s", err)
 		}
 	}
 }
 
-func (app *App) OneReceiveAndProcess(ctx context.Context) error {
+func (app *App) Batch(ctx context.Context) error {
 	urls, receiptHandle, err := app.Receive(ctx)
 	defer receiptHandle.Cleanup()
 	if err != nil {
@@ -80,57 +87,36 @@ func (app *App) OneReceiveAndProcess(ctx context.Context) error {
 	return nil
 }
 
-var shutdownPollInterval = 500 * time.Millisecond
-
-func (app *App) Shutdown(ctx context.Context) error {
-
-	app.closeDoneChan()
-	ticker := time.NewTicker(shutdownPollInterval)
-	defer ticker.Stop()
-	for {
-		if !app.isAlive.isSet() {
-			return nil
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-ticker.C:
-		}
-	}
+type RunOption interface {
+	Apply(*RunSettings)
 }
 
-//doneChan controll functions. as net/http Server
-func (app *App) getDoneChan() <-chan struct{} {
-	app.mu.Lock()
-	defer app.mu.Unlock()
-	return app.getDoneChanLocked()
+type RunSettings struct {
+	ExitNoMessage bool
+	ExitError     bool
 }
 
-func (app *App) getDoneChanLocked() chan struct{} {
-	if app.doneChan == nil {
-		app.doneChan = make(chan struct{})
-	}
-	return app.doneChan
+func (s *RunSettings) Apply(o *RunSettings) {
+	o.ExitNoMessage = s.ExitNoMessage
+	o.ExitError = s.ExitError
 }
 
-func (app *App) closeDoneChanLocked() {
-	ch := app.getDoneChanLocked()
-	select {
-	case <-ch:
-		// Already closed. Don't close again.
-	default:
-		close(ch)
-	}
+type withExitNoMessage bool
+
+func (opt withExitNoMessage) Apply(settings *RunSettings) {
+	settings.ExitNoMessage = bool(opt)
 }
 
-func (app *App) closeDoneChan() {
-	app.mu.Lock()
-	defer app.mu.Unlock()
-	app.closeDoneChanLocked()
+func WithExitNoMessage(flag bool) RunOption {
+	return withExitNoMessage(flag)
 }
 
-type atomicBool int32
+type withExitError bool
 
-func (b *atomicBool) isSet() bool { return atomic.LoadInt32((*int32)(b)) != 0 }
-func (b *atomicBool) set()        { atomic.StoreInt32((*int32)(b), 1) }
-func (b *atomicBool) unset()      { atomic.StoreInt32((*int32)(b), 0) }
+func (opt withExitError) Apply(settings *RunSettings) {
+	settings.ExitError = bool(opt)
+}
+
+func WithExitError(flag bool) RunOption {
+	return withExitError(flag)
+}

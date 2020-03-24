@@ -60,15 +60,12 @@ func TestE2E(t *testing.T) {
 			mgr.OverwriteConfig(conf)
 			app := bqin.NewApp(conf)
 
-			ctx := context.Background()
-			for count := 0; count < len(c.Messages); count++ {
-				err := app.OneReceiveAndProcess(ctx)
-				if err != nil {
-					t.Fatalf("unexpected run error: %s", err)
-				}
+			runOpts := []bqin.RunOption{
+				bqin.WithExitNoMessage(true),
+				bqin.WithExitError(true),
 			}
-			if err := app.OneReceiveAndProcess(ctx); err != bqin.ErrNoMessage {
-				t.Errorf("when no more massage: %s", err)
+			if err = app.Run(context.Background(), runOpts...); err != nil && err != bqin.ErrNoMessage {
+				t.Fatalf("unexpected run error: %s", err)
 			}
 			loaded := mgr.BigQuery.LoadedData()
 			if !reflect.DeepEqual(loaded, c.Expected) {
