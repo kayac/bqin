@@ -6,33 +6,30 @@ import (
 	"testing"
 
 	"github.com/kayac/bqin"
-	"github.com/kayac/bqin/cloud"
 	"github.com/kayac/bqin/internal/logger"
 	"github.com/kayac/bqin/internal/stub"
 )
 
 func TestTransporter(t *testing.T) {
-	logger.Setup(logger.NewTestingLogWriter(t), GetTestLogLevel())
+	logger.Setup(logger.NewTestingLogWriter(t), GetLogLevel())
 	stubGCS := stub.NewStubGCS()
 	defer stubGCS.Close()
 	stubS3 := stub.NewStubS3("testdata/s3/")
 	defer stubS3.Close()
 
-	conf := &cloud.Config{
-		AWS: &cloud.AWS{
-			Region:           "local",
-			DisableSSL:       true,
-			S3ForcePathStyle: true,
-			S3Endpoint:       stubS3.Endpoint(),
-		},
-		GCP: &cloud.GCP{
-			WithoutAuthentication: true,
-			CloudStorageEndpoint:  stubGCS.Endpoint(),
-		},
+	conf := bqin.NewDefaultConfig()
+	conf.Cloud.AWS = &bqin.AWS{
+		Region:           "local",
+		DisableSSL:       true,
+		S3ForcePathStyle: true,
+		S3Endpoint:       stubS3.Endpoint(),
 	}
-	sess := conf.AWS.BuildSession()
-	opts := conf.GCP.BuildOption(cloud.CloudStorageServiceID)
-	transporter := bqin.NewTransporter(sess, opts...)
+	conf.Cloud.GCP = &bqin.GCP{
+		WithoutAuthentication: true,
+		CloudStorageEndpoint:  stubGCS.Endpoint(),
+	}
+	factory := &bqin.Factory{Config: conf}
+	transporter := factory.NewTransporter()
 
 	cases := []struct {
 		Comment string

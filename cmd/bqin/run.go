@@ -39,11 +39,7 @@ func (r *runCmd) Execute(ctx context.Context, _ *flag.FlagSet, _ ...interface{})
 		logger.Errorf("load config failed: %s", err)
 		return subcommands.ExitFailure
 	}
-	app, err := bqin.NewApp(conf)
-	if err != nil {
-		logger.Errorf("setup condition failed: %s", err)
-		return subcommands.ExitFailure
-	}
+	app := bqin.NewApp(conf)
 	idleClosed := make(chan struct{})
 	go func() {
 		trapSignals := []os.Signal{

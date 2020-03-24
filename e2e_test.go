@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math/big"
-	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -18,7 +17,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/kayac/bqin"
 	"github.com/kayac/bqin/internal/logger"
-	"github.com/kayac/bqin/internal/stub"
 	"github.com/kylelemons/godebug/pretty"
 
 	"gopkg.in/yaml.v2"
@@ -30,7 +28,7 @@ type E2ECase struct {
 	Messages  []string            `yaml:"messages"`
 	Expected  map[string][]string `yaml:"expected"`
 
-	stubMgr *stub.Manager
+	stubMgr *StubManager
 	msgs    []*sqs.Message
 	conf    *bqin.Config
 }
@@ -71,14 +69,6 @@ func loadCases(t *testing.T, caseYaml string) []*E2ECase {
 	return cases
 }
 
-func (c *E2ECase) GetLogLevel() string {
-	debug := os.Getenv("DEBUG")
-	if debug == "" {
-		return logger.InfoLevel
-	}
-	return logger.DebugLevel
-}
-
 func (c *E2ECase) String() string {
 	if c.CaseName == "" {
 		return "file:" + c.Configure
@@ -87,8 +77,8 @@ func (c *E2ECase) String() string {
 }
 
 func (c *E2ECase) Prepare(t *testing.T) {
-	logger.Setup(logger.NewTestingLogWriter(t), c.GetLogLevel())
-	c.stubMgr = stub.NewManager("testdata/s3/")
+	logger.Setup(logger.NewTestingLogWriter(t), GetLogLevel())
+	c.stubMgr = NewStubManager("testdata/s3/")
 
 	//generate sqs message
 	c.msgs = make([]*sqs.Message, 0, len(c.Messages))
@@ -113,16 +103,13 @@ func (c *E2ECase) Prepare(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Prepare failed, load configure  %s:", err)
 	}
-	c.stubMgr.OverwriteConfig(c.conf.Cloud)
+	c.stubMgr.OverwriteConfig(c.conf)
 }
 
 func (c *E2ECase) Run(t *testing.T) {
 	c.Prepare(t)
 	defer c.Cleanup(t)
-	app, err := bqin.NewApp(c.conf)
-	if err != nil {
-		t.Fatalf("app initialize failed: %s", err)
-	}
+	app := bqin.NewApp(c.conf)
 	ctx := context.Background()
 	for count := 0; count < len(c.msgs); count++ {
 		err := app.OneReceiveAndProcess(ctx)
@@ -130,8 +117,7 @@ func (c *E2ECase) Run(t *testing.T) {
 			t.Fatalf("unexpected run error: %s", err)
 		}
 	}
-	err = app.OneReceiveAndProcess(ctx)
-	if err != bqin.ErrNoMessage {
+	if err := app.OneReceiveAndProcess(ctx); err != bqin.ErrNoMessage {
 		t.Errorf("when no more massage: %s", err)
 	}
 	loaded := c.stubMgr.BigQuery.LoadedData()

@@ -45,11 +45,7 @@ func (r *requestCmd) Execute(ctx context.Context, f *flag.FlagSet, _ ...interfac
 		logger.Errorf("load config failed: %s", err)
 		return subcommands.ExitFailure
 	}
-	app, err := bqin.NewApp(conf)
-	if err != nil {
-		logger.Errorf("setup condition failed: %s", err)
-		return subcommands.ExitFailure
-	}
+	app := bqin.NewApp(conf)
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()

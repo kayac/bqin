@@ -7,7 +7,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/kayac/bqin/cloud"
 	"github.com/kayac/bqin/internal/logger"
 )
 
@@ -23,19 +22,9 @@ type App struct {
 	doneChan   chan struct{}
 }
 
-func NewApp(conf *Config) (*App, error) {
-	sess := conf.Cloud.AWS.BuildSession()
-	return &App{
-		Receiver: NewReceiver(conf.QueueName, sess),
-		Resolver: NewResolver(conf.Rules),
-		Transporter: NewTransporter(
-			sess,
-			conf.Cloud.GCP.BuildOption(cloud.CloudStorageServiceID)...,
-		),
-		Loader: NewLoader(
-			conf.Cloud.GCP.BuildOption(cloud.BigQueryServiceID)...,
-		),
-	}, nil
+func NewApp(conf *Config) *App {
+	factory := &Factory{Config: conf}
+	return factory.NewApp()
 }
 
 func (app *App) ReceiveAndProcess() error {

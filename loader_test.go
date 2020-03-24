@@ -12,7 +12,7 @@ import (
 )
 
 func TestLoader(t *testing.T) {
-	logger.Setup(logger.NewTestingLogWriter(t), GetTestLogLevel())
+	logger.Setup(logger.NewTestingLogWriter(t), GetLogLevel())
 	s := stub.NewStubBigQuery()
 	defer s.Close()
 
