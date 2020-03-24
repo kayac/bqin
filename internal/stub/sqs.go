@@ -1,14 +1,20 @@
 package stub
 
 import (
+	"crypto/md5"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/xml"
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math/big"
 	"net/http"
 	"net/url"
 
+	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/sqs"
+	"github.com/google/uuid"
 	"github.com/kayac/bqin/internal/logger"
 )
 
@@ -25,6 +31,43 @@ func NewStubSQS(receiptHandle string) *StubSQS {
 	r := s.getRouter()
 	r.PathPrefix("/").HandlerFunc(s.serveHTTP).Methods("POST")
 	return s
+}
+
+func NewReceiptHandle() string {
+	runes := make([]byte, 64)
+	for i := 0; i < 64; i++ {
+		num, _ := rand.Int(rand.Reader, big.NewInt(255))
+		runes[i] = byte(num.Int64())
+	}
+	return base64.RawStdEncoding.EncodeToString(runes)
+}
+
+func NewSQSMessageFromFile(path string) (*sqs.Message, error) {
+	body, err := ioutil.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	msgId, _ := uuid.NewRandom()
+	msg := &sqs.Message{
+		Body:          aws.String(string(body)),
+		MD5OfBody:     aws.String(fmt.Sprintf("%x", md5.Sum(body))),
+		ReceiptHandle: aws.String(NewReceiptHandle()),
+		MessageId:     aws.String(msgId.String()),
+	}
+	return msg, nil
+}
+
+func (s *StubSQS) SendMessagesFromFile(paths []string) error {
+	msgs := make([]*sqs.Message, 0, len(paths))
+	for _, path := range paths {
+		msg, err := NewSQSMessageFromFile(path)
+		if err != nil {
+			return err
+		}
+		msgs = append(msgs, msg)
+	}
+	s.SetRecivedMessages(msgs)
+	return nil
 }
 
 func (s *StubSQS) SetRecivedMessages(msgs []*sqs.Message) {
