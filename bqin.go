@@ -38,7 +38,7 @@ func (app *App) Run(ctx context.Context, opts ...RunOption) error {
 		default:
 		}
 
-		switch err := app.Batch(ctx); err {
+		switch err := app.Batch(context.Background()); err {
 		case ErrNoMessage:
 			if settings.ExitNoMessage {
 				logger.Infof("success all")
