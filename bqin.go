@@ -43,7 +43,7 @@ func (app *App) Run(ctx context.Context, opts ...RunOption) error {
 		default:
 		}
 
-		switch err := app.Batch(context.Background()); err {
+		switch err := app.batch(context.Background()); err {
 		case ErrNoMessage:
 			if settings.ExitNoMessage {
 				logger.Infof("success all")
@@ -60,7 +60,7 @@ func (app *App) Run(ctx context.Context, opts ...RunOption) error {
 	}
 }
 
-func (app *App) Batch(ctx context.Context) error {
+func (app *App) batch(ctx context.Context) error {
 	urls, receiptHandle, err := app.Receive(ctx)
 	defer receiptHandle.Cleanup()
 	if err != nil {

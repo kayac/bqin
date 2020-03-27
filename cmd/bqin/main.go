@@ -18,7 +18,7 @@ func main() {
 	}, "")
 	subcommands.Register(&cmdWrap{
 		Command: &signalTrapper{
-			Command: &requestCmd{},
+			Command: &batchCmd{},
 		},
 	}, "")
 	flag.Parse()
