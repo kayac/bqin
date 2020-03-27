@@ -66,9 +66,10 @@ func (r *Rule) buildKeyMacher() error {
 	switch {
 	case r.S3.KeyPrefix != "":
 		r.keyMatcher = func(key string) (bool, []string) {
-			if strings.HasPrefix(key, r.S3.KeyPrefix) {
+			if strings.HasPrefix(strings.Trim(key, "/"), r.S3.KeyPrefix) {
 				return true, []string{key}
 			}
+			logger.Debugf("object key start %s.key is %s`", r.S3.KeyPrefix, key)
 			return false, nil
 		}
 	case r.S3.KeyRegexp != "":
@@ -79,6 +80,7 @@ func (r *Rule) buildKeyMacher() error {
 		r.keyMatcher = func(key string) (bool, []string) {
 			capture := reg.FindStringSubmatch(key)
 			if len(capture) == 0 {
+				logger.Debugf("object key not match regexp(%s). key is %s`", r.S3.KeyRegexp, key)
 				return false, nil
 			}
 			return true, capture
@@ -93,6 +95,7 @@ func (r *Rule) buildKeyMacher() error {
 func (r *Rule) match(bucket, key string) (bool, []string) {
 	logger.Debugf("try match `s3://%s/%s` to `%s`", bucket, key, r.String())
 	if bucket != r.S3.Bucket {
+		logger.Debugf("bucket name is missmatch: %s is not %s`", bucket, r.S3.Bucket)
 		return false, nil
 	}
 	return r.keyMatcher(key)

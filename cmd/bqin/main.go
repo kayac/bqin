@@ -21,6 +21,9 @@ func main() {
 			Command: &batchCmd{},
 		},
 	}, "")
+	subcommands.Register(&cmdWrap{
+		Command: &checkCmd{},
+	}, "")
 	flag.Parse()
 
 	os.Exit(int(subcommands.Execute(context.Background())))
