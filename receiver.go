@@ -34,7 +34,7 @@ func NewReceiver(queueName string, sess *session.Session) *Receiver {
 }
 
 type ReceiptHandle struct {
-	svc              *sqs.SQS
+	sess             *session.Session
 	queueURL         string
 	isCompelete      bool
 	msgId            string
@@ -58,7 +58,7 @@ func (r *Receiver) Receive(ctx context.Context) ([]*url.URL, *ReceiptHandle, err
 		return nil, nil, ErrNoMessage
 	}
 	msg := res.Messages[0]
-	handle := newReceiptHandle(svc, qurl, msg)
+	handle := newReceiptHandle(r.sess, qurl, msg)
 	handle.Debugf("body: %s", *msg.Body)
 
 	if msg.Body == nil {
@@ -123,10 +123,11 @@ func (r *Receiver) GetQueueName() string {
 	return r.queueName
 }
 
-func newReceiptHandle(svc *sqs.SQS, queueURL string, msg *sqs.Message) *ReceiptHandle {
+func newReceiptHandle(sess *session.Session, queueURL string, msg *sqs.Message) *ReceiptHandle {
 	handle := &ReceiptHandle{
-		svc:              svc,
+		sess:             sess,
 		isCompelete:      false,
+		queueURL:         queueURL,
 		msgId:            *msg.MessageId,
 		msgReceiptHandle: *msg.ReceiptHandle,
 	}
@@ -176,7 +177,9 @@ func (h *ReceiptHandle) Cleanup() error {
 		QueueUrl:      aws.String(h.queueURL),
 		ReceiptHandle: aws.String(h.msgReceiptHandle),
 	}
-	_, err := h.svc.DeleteMessage(input)
+	h.Debugf("input is %#v", input)
+	svc := sqs.New(h.sess)
+	_, err := svc.DeleteMessage(input)
 	if err == nil {
 		cleanuped = true
 		h.Infof("Completed message.")
@@ -188,7 +191,7 @@ func (h *ReceiptHandle) Cleanup() error {
 	defer cancel()
 
 	for i := 1; backoff.Continue(b); i++ {
-		_, err = h.svc.DeleteMessage(input)
+		_, err = svc.DeleteMessage(input)
 		if err == nil {
 			cleanuped = true
 			h.Infof("Retry completed message.")

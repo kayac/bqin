@@ -78,7 +78,8 @@ func (app *App) Batch(ctx context.Context) error {
 		}
 	}()
 
-	for _, job := range jobs {
+	for i, job := range jobs {
+		receiptHandle.Infof("[job %02d]%s", i, job)
 		transportHandle, err := app.Transport(ctx, job.TransportJob)
 		if err != nil {
 			return err
@@ -87,6 +88,7 @@ func (app *App) Batch(ctx context.Context) error {
 		if err := app.Load(ctx, job.LoadingJob); err != nil {
 			return err
 		}
+		receiptHandle.Infof("[job %02d]complte job", i)
 	}
 	receiptHandle.Complete()
 	return nil

@@ -1,6 +1,7 @@
 package bqin
 
 import (
+	"fmt"
 	"net/url"
 	"strconv"
 	"strings"
@@ -62,6 +63,10 @@ func newJob(r *Rule, u *url.URL, capture []string) *Job {
 		},
 		LoadingJob: loadingJob,
 	}
+}
+
+func (job *Job) String() string {
+	return fmt.Sprintf(`%s, and %s`, job.TransportJob, job.LoadingJob)
 }
 
 // example: when capture []string{"hoge"},  table_$1 => table_hoge

@@ -2,6 +2,7 @@ package bqin
 
 import (
 	"context"
+	"fmt"
 
 	"cloud.google.com/go/bigquery"
 	"github.com/kayac/bqin/internal/logger"
@@ -34,6 +35,10 @@ func NewLoadingJob(dest *LoadingDestination, objectURIs ...string) *LoadingJob {
 		CreateDisposition:  bigquery.CreateIfNeeded,
 		WriteDisposition:   bigquery.WriteAppend,
 	}
+}
+
+func (job *LoadingJob) String() string {
+	return fmt.Sprintf("load to %s", job.LoadingDestination)
 }
 
 func (l *Loader) Load(ctx context.Context, job *LoadingJob) error {
