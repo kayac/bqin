@@ -23,6 +23,8 @@ func TestTransporter(t *testing.T) {
 		DisableSSL:       true,
 		S3ForcePathStyle: true,
 		S3Endpoint:       stubS3.Endpoint(),
+		AccessKeyID:      "AWS_ACCESS_KEY_ID",
+		SecretAccessKey:  "AWS_SECRET_ACCESS_KEY",
 	}
 	conf.Cloud.GCP = &bqin.GCP{
 		WithoutAuthentication: true,
