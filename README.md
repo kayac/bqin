@@ -104,35 +104,18 @@ BQin waits new SQS messages and processing it continually.
 $ bqin run -config config.yaml [-debug]
 ```
 
-### maual load with request file (json)
+### batch
 
-BQin read request file and processing it.
+BQin receive SQS messages and processing. exit when all messages in the queue have been read.
 
 ```
-$ bqin request -config config.yaml [-debug] request.json
+$ bqin batch -config config.yaml -queue <dlq-queue-name> [-debug]
 ```
 
-request file format as
+## Check Rule
 
-```json
-{
-    "records":[
-        {
-            "source":{
-                "bucket":"bqin.bucket.test",
-                "object":"data/user/part-0001.csv"
-            },
-            "target":{
-                "dataset":"bqin",
-                "table":"user_20200101"
-            }
-            "option": {
-                "temporary_bucket":"my_bucket_name",
-                "gzip": true
-            }
-        }
-    ]
-}
+```
+$ echo "s3://bucket.example.com/object.txt" | bqin check -config config.yaml
 ```
 
 # LICENCE  
