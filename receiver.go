@@ -109,6 +109,20 @@ func (r *Receiver) getQueueURL() (string, error) {
 	return r.queueURL, nil
 }
 
+func (r *Receiver) SetQueueName(queueName string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.queueName == queueName {
+		return
+	}
+	r.queueName = queueName
+	r.queueURL = ""
+}
+
+func (r *Receiver) GetQueueName() string {
+	return r.queueName
+}
+
 func newReceiptHandle(svc *sqs.SQS, queueURL string, msg *sqs.Message) *ReceiptHandle {
 	handle := &ReceiptHandle{
 		svc:              svc,

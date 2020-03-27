@@ -26,6 +26,11 @@ func (app *App) Run(ctx context.Context, opts ...RunOption) error {
 	for _, opt := range opts {
 		opt.Apply(settings)
 	}
+	if settings.QueueName != "" {
+		defaultQueueName := app.GetQueueName()
+		app.SetQueueName(settings.QueueName)
+		defer app.SetQueueName(defaultQueueName)
+	}
 
 	for {
 		select {
@@ -94,6 +99,7 @@ type RunOption interface {
 type RunSettings struct {
 	ExitNoMessage bool
 	ExitError     bool
+	QueueName     string
 }
 
 func (s *RunSettings) Apply(o *RunSettings) {
@@ -119,4 +125,14 @@ func (opt withExitError) Apply(settings *RunSettings) {
 
 func WithExitError(flag bool) RunOption {
 	return withExitError(flag)
+}
+
+type withQueueName string
+
+func (opt withQueueName) Apply(settings *RunSettings) {
+	settings.QueueName = string(opt)
+}
+
+func WithQueueName(queueName string) RunOption {
+	return withQueueName(queueName)
 }
