@@ -1,10 +1,10 @@
-package cloud_test
+package bqin_test
 
 import (
 	"strings"
 	"testing"
 
-	"github.com/kayac/bqin/cloud"
+	"github.com/kayac/bqin"
 
 	yaml "gopkg.in/yaml.v2"
 )
@@ -27,7 +27,7 @@ func TestBase64String(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.orig, func(t *testing.T) {
 			decoder := yaml.NewDecoder(strings.NewReader(c.orig))
-			var b64str cloud.Base64String
+			var b64str bqin.Base64String
 			if err := decoder.Decode(&b64str); (err != nil) != c.isErr {
 				t.Errorf("unexpected error: %s", err)
 				return
