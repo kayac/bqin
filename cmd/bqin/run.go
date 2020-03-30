@@ -3,10 +3,6 @@ package main
 import (
 	"context"
 	"flag"
-	"os"
-	"os/signal"
-	"syscall"
-	"time"
 
 	"github.com/google/subcommands"
 	"github.com/kayac/bqin"
@@ -39,43 +35,10 @@ func (r *runCmd) Execute(ctx context.Context, _ *flag.FlagSet, _ ...interface{})
 		logger.Errorf("load config failed: %s", err)
 		return subcommands.ExitFailure
 	}
-	app, err := bqin.NewApp(conf)
-	if err != nil {
-		logger.Errorf("setup condition failed: %s", err)
-		return subcommands.ExitFailure
-	}
-	idleClosed := make(chan struct{})
-	go func() {
-		trapSignals := []os.Signal{
-			syscall.SIGHUP,
-			syscall.SIGINT,
-			syscall.SIGTERM,
-			syscall.SIGQUIT,
-		}
-		sigint := make(chan os.Signal, 1)
-		signal.Notify(sigint, trapSignals...)
-		<-sigint
-
-		logger.Infof("start sutdown...")
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		if err := app.Shutdown(ctx); err != nil {
-			logger.Errorf("shutdown failed: %v", err)
-		} else {
-			logger.Infof("finish shutdown.")
-		}
-		close(idleClosed)
-	}()
-
-	if err := app.ReceiveAndProcess(); err != nil {
-		if err == context.Canceled {
-			logger.Infof("canceled")
-			return subcommands.ExitSuccess
-		}
+	if err := bqin.NewApp(conf).Run(ctx); err != nil {
 		logger.Errorf("run error: %v", err)
 		return subcommands.ExitFailure
 	}
-	<-idleClosed
 	logger.Infof("goodbye.")
 	return subcommands.ExitSuccess
 }

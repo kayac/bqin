@@ -1,8 +1,6 @@
-package cloud
+package bqin
 
 import (
-	"os"
-
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/endpoints"
@@ -11,39 +9,12 @@ import (
 	"google.golang.org/api/option"
 )
 
-type Config struct {
-	AWS *AWS `yaml:"aws,omitempty"`
-	GCP *GCP `yaml:"gcp,omitempty"`
+type Factory struct {
+	*Config
 }
 
-func NewDefaultConfig() *Config {
-	return &Config{
-		AWS: &AWS{
-			Region:           os.Getenv("AWS_REGION"),
-			DisableSSL:       false,
-			S3ForcePathStyle: false,
-			S3Endpoint:       "",
-			SQSEndpoint:      "",
-		},
-		GCP: &GCP{
-			WithoutAuthentication: false,
-		},
-	}
-}
-
-type AWS struct {
-	Region                  string `yaml:"region,omitempty"`
-	DisableSSL              bool   `yaml:"disable_ssl,omitempty"`
-	S3ForcePathStyle        bool   `yaml:"s3_force_path_style,omitempty"`
-	S3Endpoint              string `yaml:"s3_endpoint,omitempty"`
-	SQSEndpoint             string `yaml:"sqs_endpoint,omitempty"`
-	AccessKeyID             string `yaml:"access_key_id,omitempty"`
-	SecretAccessKey         string `yaml:"secret_access_key,omitempty"`
-	DisableShardConfigState bool   `yaml:"disable_shard_config_state,omitempty"`
-}
-
-func (c *AWS) BuildSession() *session.Session {
-
+func (f *Factory) NewAWSSession() *session.Session {
+	c := f.Config.Cloud.AWS
 	conf := &aws.Config{
 		DisableSSL:       aws.Bool(c.DisableSSL),
 		Region:           aws.String(c.Region),
@@ -84,19 +55,24 @@ func (c *AWS) BuildSession() *session.Session {
 	return sess
 }
 
-const (
-	BigQueryServiceID     = "bigquery"
-	CloudStorageServiceID = "storage"
-)
-
-type GCP struct {
-	WithoutAuthentication bool         `yaml:"without_authentication,omitempty"`
-	BigQueryEndpoint      string       `yaml:"big_query_endpoint,omitempty"`
-	CloudStorageEndpoint  string       `yaml:"cloud_storage_endpoint,omitempty"`
-	Base64Credential      Base64String `yaml:"base64_credential"`
+func (f *Factory) NewCloudStorageOptions() []option.ClientOption {
+	opts := f.NewGCPOptions()
+	if endpoint := f.Config.Cloud.GCP.CloudStorageEndpoint; endpoint != "" {
+		opts = append(opts, option.WithEndpoint(endpoint))
+	}
+	return opts
 }
 
-func (c *GCP) BuildOption(service string) []option.ClientOption {
+func (f *Factory) NewBigQueryOptions() []option.ClientOption {
+	opts := f.NewGCPOptions()
+	if endpoint := f.Config.Cloud.GCP.BigQueryEndpoint; endpoint != "" {
+		opts = append(opts, option.WithEndpoint(endpoint))
+	}
+	return opts
+}
+
+func (f *Factory) NewGCPOptions() []option.ClientOption {
+	c := f.Config.Cloud.GCP
 	opts := make([]option.ClientOption, 0, 2)
 	if c.WithoutAuthentication {
 		opts = append(opts, option.WithoutAuthentication())
@@ -104,15 +80,40 @@ func (c *GCP) BuildOption(service string) []option.ClientOption {
 	if !c.Base64Credential.IsEmpty() {
 		opts = append(opts, option.WithCredentialsJSON(c.Base64Credential.Bytes()))
 	}
-	switch service {
-	case BigQueryServiceID:
-		if c.BigQueryEndpoint != "" {
-			opts = append(opts, option.WithEndpoint(c.BigQueryEndpoint))
-		}
-	case CloudStorageServiceID:
-		if c.CloudStorageEndpoint != "" {
-			opts = append(opts, option.WithEndpoint(c.CloudStorageEndpoint))
-		}
-	}
 	return opts
+}
+
+func (f *Factory) NewReceiver() *Receiver {
+	return NewReceiver(
+		f.Config.QueueName,
+		f.NewAWSSession(),
+	)
+}
+
+func (f *Factory) NewResolver() *Resolver {
+	return NewResolver(
+		f.Config.Rules,
+	)
+}
+
+func (f *Factory) NewTransporter() *Transporter {
+	return NewTransporter(
+		f.NewAWSSession(),
+		f.NewCloudStorageOptions()...,
+	)
+}
+
+func (f *Factory) NewLoader() *Loader {
+	return NewLoader(
+		f.NewBigQueryOptions()...,
+	)
+}
+
+func (f *Factory) NewApp() *App {
+	return &App{
+		Receiver:    f.NewReceiver(),
+		Resolver:    f.NewResolver(),
+		Transporter: f.NewTransporter(),
+		Loader:      f.NewLoader(),
+	}
 }

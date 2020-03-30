@@ -3,147 +3,138 @@ package bqin
 import (
 	"context"
 	"errors"
-	"sync"
-	"sync/atomic"
-	"time"
 
-	"github.com/kayac/bqin/cloud"
 	"github.com/kayac/bqin/internal/logger"
 )
 
-var (
-	ErrNoRequest = errors.New("no import request")
-)
-
-type ImportRequest struct {
-	ID            string                 `json:"id,omitempty"`
-	ReceiptHandle string                 `json:"receipt_handle,omitempty"`
-	Records       []*ImportRequestRecord `json:"records"`
-}
-
-type Receiver interface {
-	Receive(context.Context) (*ImportRequest, error)
-	Complete(context.Context, *ImportRequest) error
-}
-
-type Processor interface {
-	Process(context.Context, *ImportRequest) error
-}
-
 type App struct {
-	Receiver
-	Processor
-
-	mu sync.Mutex
-
-	inShutdown atomicBool
-	isAlive    atomicBool
-	doneChan   chan struct{}
+	*Receiver
+	*Resolver
+	*Transporter
+	*Loader
 }
 
-func NewApp(conf *Config) (*App, error) {
-	c := cloud.New(conf.Cloud)
-	return &App{
-		Receiver:  NewSQSReceiver(conf, c),
-		Processor: NewBigQueryTransporter(conf, c),
-	}, nil
+func NewApp(conf *Config) *App {
+	factory := &Factory{Config: conf}
+	return factory.NewApp()
 }
 
-func (app *App) ReceiveAndProcess() error {
+func (app *App) Run(ctx context.Context, opts ...RunOption) error {
 	logger.Infof("Starting up bqin worker")
 	defer logger.Infof("Shutdown bqin worker")
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	app.isAlive.set()
-	defer app.isAlive.unset()
+	settings := &RunSettings{}
+	for _, opt := range opts {
+		opt.Apply(settings)
+	}
+	if settings.QueueName != "" {
+		defaultQueueName := app.GetQueueName()
+		app.SetQueueName(settings.QueueName)
+		defer app.SetQueueName(defaultQueueName)
+	}
 
 	for {
 		select {
-		case <-app.getDoneChan():
+		case <-ctx.Done():
+			if err := ctx.Err(); err != context.Canceled {
+				return err
+			}
+			logger.Infof("canceled")
 			return nil
 		default:
 		}
-		if err := app.OneReceiveAndProcess(ctx); err != nil && err != ErrNoRequest {
-			logger.Errorf("OneReceiveAndProcess failed. reason:%s", err)
+
+		switch err := app.batch(context.Background()); err {
+		case ErrNoMessage:
+			if settings.ExitNoMessage {
+				logger.Infof("success all")
+				return nil
+			}
+		case nil:
+			//nothing todo
+		default:
+			if settings.ExitError {
+				return err
+			}
+			logger.Errorf("process failed. reason:%s", err)
 		}
 	}
 }
 
-func (app *App) OneReceiveAndProcess(ctx context.Context) error {
-	if app.Receiver == nil {
-		return errors.New("Receiver is nil")
-	}
-
-	if app.Processor == nil {
-		return errors.New("Processor is nil")
-	}
-	req, err := app.Receive(ctx)
+func (app *App) batch(ctx context.Context) error {
+	urls, receiptHandle, err := app.Receive(ctx)
+	defer receiptHandle.Cleanup()
 	if err != nil {
 		return err
 	}
-	logger.InfoDump(req)
-	if err := app.Process(ctx, req); err != nil {
-		return err
+	jobs := app.Resolve(urls)
+	if len(jobs) == 0 {
+		return errors.New("nothing to do")
 	}
 
-	if err := app.Complete(ctx, req); err != nil {
-		return err
+	transportHandles := make([]*TransportJobHandle, 0, len(jobs))
+	defer func() {
+		for _, h := range transportHandles {
+			h.Cleanup(ctx)
+		}
+	}()
+
+	for i, job := range jobs {
+		receiptHandle.Infof("[job %02d]%s", i, job)
+		transportHandle, err := app.Transport(ctx, job.TransportJob)
+		if err != nil {
+			return err
+		}
+		transportHandles = append(transportHandles, transportHandle)
+		if err := app.Load(ctx, job.LoadingJob); err != nil {
+			return err
+		}
+		receiptHandle.Infof("[job %02d]complte job", i)
 	}
+	receiptHandle.Complete()
 	return nil
 }
 
-var shutdownPollInterval = 500 * time.Millisecond
-
-func (app *App) Shutdown(ctx context.Context) error {
-
-	app.closeDoneChan()
-	ticker := time.NewTicker(shutdownPollInterval)
-	defer ticker.Stop()
-	for {
-		if !app.isAlive.isSet() {
-			return nil
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-ticker.C:
-		}
-	}
+type RunOption interface {
+	Apply(*RunSettings)
 }
 
-//doneChan controll functions. as net/http Server
-func (app *App) getDoneChan() <-chan struct{} {
-	app.mu.Lock()
-	defer app.mu.Unlock()
-	return app.getDoneChanLocked()
+type RunSettings struct {
+	ExitNoMessage bool
+	ExitError     bool
+	QueueName     string
 }
 
-func (app *App) getDoneChanLocked() chan struct{} {
-	if app.doneChan == nil {
-		app.doneChan = make(chan struct{})
-	}
-	return app.doneChan
+func (s *RunSettings) Apply(o *RunSettings) {
+	o.ExitNoMessage = s.ExitNoMessage
+	o.ExitError = s.ExitError
 }
 
-func (app *App) closeDoneChanLocked() {
-	ch := app.getDoneChanLocked()
-	select {
-	case <-ch:
-		// Already closed. Don't close again.
-	default:
-		close(ch)
-	}
+type withExitNoMessage bool
+
+func (opt withExitNoMessage) Apply(settings *RunSettings) {
+	settings.ExitNoMessage = bool(opt)
 }
 
-func (app *App) closeDoneChan() {
-	app.mu.Lock()
-	defer app.mu.Unlock()
-	app.closeDoneChanLocked()
+func WithExitNoMessage(flag bool) RunOption {
+	return withExitNoMessage(flag)
 }
 
-type atomicBool int32
+type withExitError bool
 
-func (b *atomicBool) isSet() bool { return atomic.LoadInt32((*int32)(b)) != 0 }
-func (b *atomicBool) set()        { atomic.StoreInt32((*int32)(b), 1) }
-func (b *atomicBool) unset()      { atomic.StoreInt32((*int32)(b), 0) }
+func (opt withExitError) Apply(settings *RunSettings) {
+	settings.ExitError = bool(opt)
+}
+
+func WithExitError(flag bool) RunOption {
+	return withExitError(flag)
+}
+
+type withQueueName string
+
+func (opt withQueueName) Apply(settings *RunSettings) {
+	settings.QueueName = string(opt)
+}
+
+func WithQueueName(queueName string) RunOption {
+	return withQueueName(queueName)
+}

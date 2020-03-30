@@ -1,4 +1,4 @@
-package cloud
+package bqin
 
 import "encoding/base64"
 
