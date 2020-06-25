@@ -105,7 +105,7 @@ func (r *Rule) Match(u *url.URL) (bool, []string) {
 	if u.Scheme != "s3" {
 		return false, nil
 	}
-	return r.match(u.Host, u.Path)
+	return r.match(u.Host, strings.TrimPrefix(u.Path, "/"))
 }
 
 func (r *Rule) String() string {
