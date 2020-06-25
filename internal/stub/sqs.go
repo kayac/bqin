@@ -20,14 +20,14 @@ import (
 
 type StubSQS struct {
 	stub
-	msgs          []*sqs.Message
-	receiptHandle string
+	msgs                     []*sqs.Message
+	NumberOfMessagesReceived int
+	NumberOfMessagesDeleted  int
 }
 
-func NewStubSQS(receiptHandle string) *StubSQS {
+func NewStubSQS() *StubSQS {
 	s := &StubSQS{}
 	s.setSvcName("sqs")
-	s.receiptHandle = receiptHandle
 	r := s.getRouter()
 	r.PathPrefix("/").HandlerFunc(s.serveHTTP).Methods("POST")
 	return s
@@ -73,6 +73,11 @@ func (s *StubSQS) SendMessagesFromFile(paths []string) error {
 func (s *StubSQS) SetRecivedMessages(msgs []*sqs.Message) {
 	s.msgs = make([]*sqs.Message, 0, len(msgs))
 	s.msgs = append(s.msgs, msgs...)
+}
+
+func (s *StubSQS) ClearMetrix() {
+	s.NumberOfMessagesDeleted = 0
+	s.NumberOfMessagesReceived = 0
 }
 
 func (s *StubSQS) serveHTTP(w http.ResponseWriter, r *http.Request) {
@@ -135,6 +140,7 @@ func (s *StubSQS) serveReceiveMessage(w http.ResponseWriter, r *http.Request, pa
 	}
 	response := fmt.Sprintf(stubSQSReceiveMessageResponseTmpl, payload)
 	io.WriteString(w, response)
+	s.NumberOfMessagesReceived++
 }
 
 func (s *StubSQS) serveDeleteMessage(w http.ResponseWriter, r *http.Request, params url.Values) {
@@ -144,6 +150,7 @@ func (s *StubSQS) serveDeleteMessage(w http.ResponseWriter, r *http.Request, par
 			s.msgs = append(s.msgs[0:i], s.msgs[i+1:len(s.msgs)]...)
 			w.WriteHeader(http.StatusOK)
 			io.WriteString(w, stubSQSDeleteMessageResponseTmpl)
+			s.NumberOfMessagesDeleted++
 			return
 		}
 	}

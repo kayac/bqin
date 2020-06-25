@@ -151,27 +151,20 @@ func (h *ReceiptHandle) Errorf(format string, args ...interface{}) {
 	logger.Errorf("[%s]"+format, args...)
 }
 
-func (h *ReceiptHandle) Complete() {
-	h.isCompelete = true
-}
-
 var policy = backoff.NewExponential(
 	backoff.WithInterval(500*time.Millisecond), // base interval
 	backoff.WithJitterFactor(0.05),             // 5% jitter
 	backoff.WithMaxRetries(5),                  // If not specified, default number of retries is 10
 )
 
-func (h *ReceiptHandle) Cleanup() error {
+func (h *ReceiptHandle) Complete() error {
 	if h == nil {
 		return nil
 	}
 
-	var cleanuped = false
-	defer func() {
-		if !cleanuped {
-			h.Errorf("Can't cleanup message. ReceiptHandle: %s", h.msgReceiptHandle)
-		}
-	}()
+	if h.isCompelete {
+		return nil
+	}
 
 	input := &sqs.DeleteMessageInput{
 		QueueUrl:      aws.String(h.queueURL),
@@ -181,7 +174,7 @@ func (h *ReceiptHandle) Cleanup() error {
 	svc := sqs.New(h.sess)
 	_, err := svc.DeleteMessage(input)
 	if err == nil {
-		cleanuped = true
+		h.isCompelete = true
 		h.Infof("Completed message.")
 		return nil
 	}
@@ -193,12 +186,19 @@ func (h *ReceiptHandle) Cleanup() error {
 	for i := 1; backoff.Continue(b); i++ {
 		_, err = svc.DeleteMessage(input)
 		if err == nil {
-			cleanuped = true
+			h.isCompelete = true
 			h.Infof("Retry completed message.")
 			return nil
 		}
 		h.Infof("Can't delete message (retry count = %d): %s", i, err)
 	}
+	h.Infof("Can't delete message. ReceiptHandle: %s", h.msgReceiptHandle)
 	h.Errorf("Max retry count reached. Giving up. last error: %s", err)
 	return ErrMaxRetry
+}
+
+func (h *ReceiptHandle) Cleanup() {
+	if h != nil && !h.isCompelete {
+		h.Infof("This message not completed, ReceiptHandle: %s", h.msgReceiptHandle)
+	}
 }

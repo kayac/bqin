@@ -34,7 +34,7 @@ type StubManager struct {
 
 func NewStubManager(basePath string) *StubManager {
 	return &StubManager{
-		SQS:          stub.NewStubSQS("hoge"),
+		SQS:          stub.NewStubSQS(),
 		S3:           stub.NewStubS3(basePath),
 		BigQuery:     stub.NewStubBigQuery(),
 		CloudStorage: stub.NewStubGCS(),
