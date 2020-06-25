@@ -90,8 +90,7 @@ func (app *App) batch(ctx context.Context) error {
 		}
 		receiptHandle.Infof("[job %02d]complte job", i)
 	}
-	receiptHandle.Complete()
-	return nil
+	return receiptHandle.Complete()
 }
 
 type RunOption interface {
