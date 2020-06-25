@@ -173,6 +173,10 @@ func (h *ReceiptHandle) Cleanup() error {
 		}
 	}()
 
+	if !h.isCompelete {
+		return errors.New("this receipt handle not complated")
+	}
+
 	input := &sqs.DeleteMessageInput{
 		QueueUrl:      aws.String(h.queueURL),
 		ReceiptHandle: aws.String(h.msgReceiptHandle),
