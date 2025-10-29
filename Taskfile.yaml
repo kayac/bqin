@@ -1,0 +1,145 @@
+# Taskfile for bqin development
+# https://taskfile.dev/
+
+version: "3"
+
+vars:
+  VERSION:
+    sh: git describe --tags --always --dirty 2>/dev/null || echo "dev"
+  BUILD_DATE:
+    sh: date +%Y-%m-%dT%H:%M:%S%z
+  BINARY: bqin
+  MAIN_PATH: ./cmd/bqin
+  LDFLAGS: -s -w -X main.version={{.VERSION}} -X main.buildDate={{.BUILD_DATE}}
+
+tasks:
+  default:
+    desc: Show available tasks
+    cmds:
+      - task -l
+    silent: true
+
+  deps:
+    desc: Download and tidy dependencies
+    cmds:
+      - go mod download
+      - go mod tidy
+
+  test:
+    desc: Run tests
+    cmds:
+      - go test -v -race -coverprofile=coverage.out ./...
+    sources:
+      - "**/*.go"
+      - go.mod
+      - go.sum
+
+  test:short:
+    desc: Run tests without race detector (faster)
+    cmds:
+      - go test -v ./...
+
+  coverage:
+    desc: Show test coverage in browser
+    deps: [test]
+    cmds:
+      - go tool cover -html=coverage.out
+
+  lint:
+    desc: Run linters (requires staticcheck)
+    cmds:
+      - go vet ./...
+      - staticcheck ./...
+    preconditions:
+      - sh: command -v staticcheck
+        msg: "staticcheck not found. Install with: go install honnef.co/go/tools/cmd/staticcheck@latest"
+
+  fmt:
+    desc: Format code
+    cmds:
+      - go fmt ./...
+
+  build:
+    desc: Build binary for current platform
+    cmds:
+      - go build -ldflags "{{.LDFLAGS}}" -o {{.BINARY}} {{.MAIN_PATH}}
+    sources:
+      - "**/*.go"
+      - go.mod
+      - go.sum
+    generates:
+      - "{{.BINARY}}"
+
+  install:
+    desc: Install binary to $GOPATH/bin
+    cmds:
+      - go install -ldflags "{{.LDFLAGS}}" {{.MAIN_PATH}}
+
+  clean:
+    desc: Clean build artifacts
+    cmds:
+      - rm -f {{.BINARY}}
+      - rm -f coverage.out
+      - rm -rf dist/
+      - rm -rf pkg/
+
+  run:
+    desc: Build and run (usage: task run -- [args])
+    deps: [build]
+    cmds:
+      - ./{{.BINARY}} {{.CLI_ARGS}}
+
+  goreleaser:check:
+    desc: Check goreleaser config
+    cmds:
+      - goreleaser check
+    preconditions:
+      - sh: command -v goreleaser
+        msg: "goreleaser not found. Install from: https://goreleaser.com/install/"
+
+  goreleaser:build:
+    desc: Build with goreleaser (snapshot)
+    cmds:
+      - goreleaser build --snapshot --clean
+    preconditions:
+      - sh: command -v goreleaser
+        msg: "goreleaser not found. Install from: https://goreleaser.com/install/"
+
+  goreleaser:release:
+    desc: Create a local release with goreleaser (for testing)
+    cmds:
+      - goreleaser release --snapshot --clean
+    preconditions:
+      - sh: command -v goreleaser
+        msg: "goreleaser not found. Install from: https://goreleaser.com/install/"
+
+  ci:
+    desc: Run all CI checks (format, lint, test)
+    cmds:
+      - task: fmt
+      - task: lint
+      - task: test
+
+  help:
+    desc: Show detailed help
+    cmds:
+      - |
+        echo "bqin development tasks"
+        echo ""
+        echo "Common tasks:"
+        echo "  task test          - Run all tests"
+        echo "  task build         - Build binary"
+        echo "  task install       - Install to GOPATH"
+        echo "  task lint          - Run linters"
+        echo "  task ci            - Run all CI checks"
+        echo ""
+        echo "Development:"
+        echo "  task run -- [args] - Build and run with arguments"
+        echo "  task coverage      - View test coverage"
+        echo ""
+        echo "Release:"
+        echo "  task goreleaser:check   - Validate goreleaser config"
+        echo "  task goreleaser:build   - Test build with goreleaser"
+        echo ""
+        echo "For full list: task -l"
+    silent: true
