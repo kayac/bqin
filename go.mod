@@ -17,5 +17,5 @@ require (
 	github.com/lestrrat-go/backoff v1.0.0
 	github.com/pkg/errors v0.9.1
 	google.golang.org/api v0.9.0
-	gopkg.in/yaml.v2 v2.2.2
+	gopkg.in/yaml.v2 v2.4.0
 )
