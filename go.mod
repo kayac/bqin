@@ -10,7 +10,7 @@ require (
 	github.com/cenkalti/backoff v2.2.1+incompatible // indirect
 	github.com/google/subcommands v1.2.0
 	github.com/google/uuid v1.1.1
-	github.com/gorilla/mux v1.7.3
+	github.com/gorilla/mux v1.8.1
 	github.com/hashicorp/logutils v1.0.0
 	github.com/kayac/go-config v0.1.0
 	github.com/kylelemons/godebug v1.1.0
