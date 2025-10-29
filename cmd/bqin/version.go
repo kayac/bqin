@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/google/subcommands"
+	"github.com/kayac/bqin"
 )
 
 var (
