@@ -9,6 +9,7 @@ import (
 	"syscall"
 
 	"github.com/google/subcommands"
+	"github.com/kayac/bqin"
 	"github.com/kayac/bqin/internal/logger"
 )
 
@@ -36,7 +37,7 @@ func (w *cmdWrap) Execute(ctx context.Context, f *flag.FlagSet, args ...interfac
 		minLevel = logger.DebugLevel
 	}
 	logger.Setup(os.Stderr, minLevel)
-	logger.Infof("bqin version: %s", version)
+	logger.Infof("bqin version: %s", bqin.Version)
 
 	return w.Command.Execute(ctx, f, args...)
 }

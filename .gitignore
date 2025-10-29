@@ -18,5 +18,11 @@ go.sum
 # related release files
 pkg/
 
+# GoReleaser output
+dist/
+
 vendor/
 *~
+
+CLAUDE.md
+AGENTS.md
