@@ -1,0 +1,34 @@
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "thursday"
+    labels:
+      - "dependencies/actions"
+
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "thursday"
+    labels:
+      - "dependencies/gomod"
+    open-pull-requests-limit: 10
+    ignore:
+      - dependency-name: "*aws*"
+        update-types: ["version-update:semver-patch"]
+    groups:
+      aws-sdk-go-v2:
+        patterns:
+          - "github.com/aws/aws-sdk-go-v2/*"
+          - "github.com/aws/aws-sdk-go-v2"
+      google:
+        patterns:
+          - "cloud.google.com/go/*"
+          - "cloud.google.com/go"
+      opentelemetry:
+        patterns:
+          - "go.opentelemetry.io/*"
+          - "go.opentelemetry.io"
